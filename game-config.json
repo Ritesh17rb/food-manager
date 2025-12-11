@@ -1,0 +1,228 @@
+{
+  "upgrades": [
+    {
+      "id": "marketing_campaign",
+      "name": "Social Media Blast",
+      "cost": 2000,
+      "icon": "bi-phone",
+      "description": "Boosts Reputation by 15% immediately and increases daily Customer Flow.",
+      "effect": {
+        "reputation": 15,
+        "customerFlow": 1.1
+      }
+    },
+    {
+      "id": "high_speed_oven",
+      "name": "TurboChef Oven",
+      "cost": 5000,
+      "icon": "bi-lightning-charge",
+      "description": "Increases Efficiency by 20% permanently.",
+      "effect": {
+        "efficiency": 20
+      }
+    },
+    {
+      "id": "staff_training",
+      "name": "Premium Service Training",
+      "cost": 1500,
+      "icon": "bi-award",
+      "description": "Boosts Staff Morale (+10) and Customer Satisfaction (+10).",
+      "effect": {
+        "staffMorale": 10,
+        "customerSatisfaction": 10
+      }
+    },
+    {
+      "id": "auto_inventory",
+      "name": "Inventory Management System",
+      "cost": 3000,
+      "icon": "bi-box-seam",
+      "description": "Reduces daily Inventory waste/decay.",
+      "effect": {
+        "inventoryEfficiency": 1.2
+      }
+    }
+  ],
+  "strategies": [
+    {
+      "id": "speed",
+      "name": "Focus on Speed",
+      "description": "Get orders out fast! (+Efficiency, -Quality)",
+      "modifiers": {
+        "efficiency": 1.2,
+        "customerSatisfaction": 0.9
+      }
+    },
+    {
+      "id": "quality",
+      "name": "Focus on Quality",
+      "description": "Perfect presentation. (+Quality, -Efficiency)",
+      "modifiers": {
+        "customerSatisfaction": 1.2,
+        "efficiency": 0.8
+      }
+    },
+    {
+      "id": "balanced",
+      "name": "Balanced Approach",
+      "description": "Standard operations.",
+      "modifiers": {
+        "efficiency": 1.0,
+        "customerSatisfaction": 1.0
+      }
+    }
+  ],
+  "industries": [
+    {
+      "id": "fast-food",
+      "name": "Fast Food Chain",
+      "icon": "bi-shop",
+      "description": "Manage a busy fast food restaurant with high customer volume and tight margins",
+      "roles": [
+        {
+          "id": "store-manager",
+          "name": "Store Manager",
+          "description": "Oversee daily operations, staff, and customer satisfaction",
+          "startingKPIs": {
+            "budget": 50000,
+            "sales": 0,
+            "customerSatisfaction": 75,
+            "staffMorale": 70,
+            "inventory": 80,
+            "reputation": 60,
+            "efficiency": 65
+          }
+        },
+        {
+          "id": "regional-manager",
+          "name": "Regional Manager",
+          "description": "Manage multiple locations and strategic decisions",
+          "startingKPIs": {
+            "budget": 200000,
+            "sales": 0,
+            "customerSatisfaction": 70,
+            "staffMorale": 65,
+            "inventory": 75,
+            "reputation": 65,
+            "efficiency": 60
+          }
+        }
+      ],
+      "npcs": [
+        {
+          "id": "head-chef",
+          "name": "Marcus",
+          "role": "Head Chef",
+          "personality": "Perfectionist, passionate about food quality, can be hot-headed",
+          "avatar": "👨‍🍳"
+        },
+        {
+          "id": "shift-supervisor",
+          "name": "Sarah",
+          "role": "Shift Supervisor",
+          "personality": "Organized, detail-oriented, sometimes stressed about rules",
+          "avatar": "👩‍💼"
+        },
+        {
+          "id": "cashier",
+          "name": "Jake",
+          "role": "Cashier",
+          "personality": "Friendly, young, eager to learn but makes small mistakes",
+          "avatar": "👨‍💻"
+        },
+        {
+          "id": "supplier",
+          "name": "Mr. Rodriguez",
+          "role": "Food Supplier",
+          "personality": "Business-minded, negotiable but strict on payments",
+          "avatar": "🚚"
+        },
+        {
+          "id": "customer-regular",
+          "name": "Mrs. Chen",
+          "role": "Regular Customer",
+          "personality": "Loyal but demanding, knows the menu better than some staff",
+          "avatar": "👵"
+        }
+      ]
+    }
+  ],
+  "difficulties": [
+    {
+      "id": "training",
+      "name": "Training Mode",
+      "description": "Learn the basics with guided scenarios and helpful hints",
+      "daysToComplete": 5,
+      "eventFrequency": "low",
+      "consequenceSeverity": 0.5
+    },
+    {
+      "id": "normal",
+      "name": "Normal",
+      "description": "Balanced challenge with realistic scenarios",
+      "daysToComplete": 7,
+      "eventFrequency": "medium",
+      "consequenceSeverity": 1.0
+    },
+    {
+      "id": "challenging",
+      "name": "Challenging",
+      "description": "High-pressure situations requiring strategic thinking",
+      "daysToComplete": 10,
+      "eventFrequency": "high",
+      "consequenceSeverity": 1.5
+    },
+    {
+      "id": "expert",
+      "name": "Expert",
+      "description": "Complex scenarios with multiple stakeholders and tough decisions",
+      "daysToComplete": 14,
+      "eventFrequency": "very-high",
+      "consequenceSeverity": 2.0
+    }
+  ],
+  "kpiDescriptions": {
+    "budget": {
+      "name": "Budget",
+      "icon": "bi-cash-stack",
+      "description": "Available funds for operations",
+      "unit": "$"
+    },
+    "sales": {
+      "name": "Sales",
+      "icon": "bi-graph-up",
+      "description": "Revenue generated",
+      "unit": "$"
+    },
+    "customerSatisfaction": {
+      "name": "Customer Satisfaction",
+      "icon": "bi-emoji-smile",
+      "description": "How happy your customers are",
+      "unit": "%"
+    },
+    "staffMorale": {
+      "name": "Staff Morale",
+      "icon": "bi-people",
+      "description": "Employee happiness and motivation",
+      "unit": "%"
+    },
+    "inventory": {
+      "name": "Inventory",
+      "icon": "bi-box-seam",
+      "description": "Stock levels",
+      "unit": "%"
+    },
+    "reputation": {
+      "name": "Reputation",
+      "icon": "bi-star",
+      "description": "Public perception of your business",
+      "unit": "%"
+    },
+    "efficiency": {
+      "name": "Efficiency",
+      "icon": "bi-speedometer2",
+      "description": "Operational effectiveness",
+      "unit": "%"
+    }
+  }
+}

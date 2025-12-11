@@ -1,0 +1,29 @@
+{
+  "title": "Strategy Game",
+  "subtitle": "High-stakes management practice with one click",
+  "demos": [
+    {
+      "id": "retail",
+      "title": "Omnichannel Retail (Liquidity Crunch)",
+      "desc": "Footfall -14%; leases roll; 22% aging stock; vendors tighten terms",
+      "icon": "bi-bag",
+      "prompt": "You are COO at a 180-store apparel chain. Store footfall -14% YoY; e-comm AOV -7%; inventory aging >90d at 22%; shrink 2.1%. Three anchor leases up in 60d (+9% rent ask). Two key vendors shorten terms; bank revolver utilization 78%. Propose markdowns, lease renegotiation, supplier credit steps, and labor scheduling. Quantify cash, GM%, and service-level risk."
+    },
+    {
+      "id": "ev",
+      "title": "EV OEM (Recall + Commodities)",
+      "desc": "BMS defect 1.4% rate; cobalt +23%; subsidy taper; charging NPS 34",
+      "icon": "bi-ev-front",
+      "prompt": "You are VP Ops at an EV OEM shipping 4 models in NA/EU. Early field failures show a batch-level BMS defect (1.4% incident rate). Cobalt +23%; two EU subsidies taper next quarter. Charging network NPS falls 55->34 (uptime issues). Outline recall vs field-fix, supplier re-pricing, and customer comp. Model GM%, unit volume, warranty reserve impact."
+    },
+    {
+      "id": "fintech",
+      "title": "Payments Fintech (Fraud Spike & Compliance)",
+      "desc": "Card-not-present fraud +60 bps; chargebacks spike; partner bank audit",
+      "icon": "bi-credit-card",
+      "prompt": "You are Head of Risk at a payments fintech. CNP fraud rises +60 bps on long-tail merchants; chargebacks up 35% MoM; dispute backlog 18 days (SLA 7). Partner bank flags KYC gaps; asks for remediation plan within 10 days. Propose controls (rules, models, 3DS2), merchant comms, staffing, and bank engagement. Quantify loss reduction, false positives, and revenue impact."
+    }
+  ],
+"systemPrompt": "You are 'The Executive', a high-fidelity business strategy simulation engine.\n\n### RULES:\n- Describe a business situation and provide the user with 3-5 options.\n- Wait for the user to choose an option.\n- When the user chooses, simulate 1-3 months of time passing, then generate the new situation based on their choice. Indicate if the overall situation improved or worsened, as a boolean.\n- After 2 turns, stop the game with a GAME OVER and review the user's choices and performance.",
+  "model": "gpt-4o-mini"
+}
