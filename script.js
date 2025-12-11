@@ -4,65 +4,101 @@ const $$ = (s, parent = document) => Array.from(parent.querySelectorAll(s));
 
 // Robust JSON parser
 function parseRelaxedJSON(str) {
+  if (!str) {
+    console.warn("parseRelaxedJSON: Empty input");
+    return null;
+  }
+  
   let s = str.trim();
   
-  // Remove markdown code blocks
-  s = s.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```\s*$/i, '');
-  const codeBlockMatch = s.match(/```(?:json)?\s*([\s\S]*?)```/);
-  if (codeBlockMatch) s = codeBlockMatch[1].trim();
+  // Log first 100 chars for debugging
+  console.log("parseRelaxedJSON input preview:", s.substring(0, 100));
+  
+  // Remove markdown code blocks - handle multiple/repeated blocks
+  // First, remove all standalone ``` markers
+  s = s.replace(/```json\s*/gi, '').replace(/```\s*/g, '');
+  
+  // Try to extract from code block if pattern exists
+  const codeBlockMatch = s.match(/\{[\s\S]*\}|\[[\s\S]*\]/);
+  if (codeBlockMatch) s = codeBlockMatch[0].trim();
+  
+  // More aggressive: Remove any conversational text before JSON starts
+  // Look for common conversational patterns and remove everything before the JSON
+  const conversationalPatterns = [
+    /^.*?(?=\{)/s,  // Remove everything before first {
+    /^.*?(?=\[)/s,  // Remove everything before first [
+  ];
+  
+  // Find the valid JSON substring (Object OR Array)
+  const firstOpenBrace = s.indexOf('{');
+  const firstOpenBracket = s.indexOf('[');
+  let startIdx = -1;
+  let endIdx = -1;
+
+  // Determine if it's likely an object or an array based on which comes first
+  if (firstOpenBrace !== -1 && (firstOpenBracket === -1 || firstOpenBrace < firstOpenBracket)) {
+      startIdx = firstOpenBrace;
+      endIdx = s.lastIndexOf('}');
+  } else if (firstOpenBracket !== -1) {
+      startIdx = firstOpenBracket;
+      endIdx = s.lastIndexOf(']');
+  }
+
+  if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
+    s = s.substring(startIdx, endIdx + 1);
+    console.log("Extracted JSON substring, length:", s.length);
+  } else {
+      console.warn("No valid JSON brackets found in response");
+      throw new Error("No valid JSON structure found in response");
+  }
   
   // Clean up potential "stuttering" (duplicate lines) logic
-  // This happens if the stream yields full snapshots instead of deltas
   const lines = s.split('\n');
-  if (lines.length > 5) { // Only check if enough lines
+  if (lines.length > 5) { 
     const cleanedLines = [];
     const seen = new Set();
     for (const line of lines) {
       const trimmed = line.trim();
-      // Heuristic: if we see the exact same line content again, it's likely a stutter artifact
-      // BUT we must allow specific JSON structural lines like "}," or "]"
-      if (trimmed === '{' || trimmed === '}' || trimmed === '},' || trimmed === ']' || trimmed.length < 3) {
+      // Allow specific structural characters 
+      if (trimmed === '{' || trimmed === '}' || trimmed === '},' || trimmed === ']' || trimmed === '],' || trimmed.length < 3) {
         cleanedLines.push(line);
       } else if (!seen.has(trimmed)) {
         seen.add(trimmed);
         cleanedLines.push(line);
       }
     }
-    // Only use cleaned version if it's significantly shorter (indicating massive duplication)
     if (cleanedLines.length < lines.length * 0.8) {
       s = cleanedLines.join('\n');
     }
-  }
-
-  // Find the OUTERMOST JSON object
-  const firstOpenBrace = s.indexOf('{');
-  const lastCloseBrace = s.lastIndexOf('}');
-  
-  if (firstOpenBrace !== -1 && lastCloseBrace !== -1 && lastCloseBrace > firstOpenBrace) {
-    s = s.substring(firstOpenBrace, lastCloseBrace + 1);
   }
   
   // Remove trailing commas
   s = s.replace(/,(\s*[}\]])/g, '$1');
   
-  // Fix unquoted keys
+  // Fix unquoted keys (basic attempt)
   s = s.replace(/([{,]\s*)(\w+)(\s*:)/g, '$1"$2"$3');
   
   // Remove any control characters
   s = s.replace(/[\x00-\x1F\x7F]/g, '');
   
   try {
-    return JSON.parse(s);
+    const result = JSON.parse(s);
+    console.log("JSON parsed successfully");
+    return result;
   } catch (e) {
-    console.warn("Primary parse failed, trying relaxed approach:", e);
-    // Fallback: try to just parse what we have, maybe it's valid now
-     try {
-       // Only one more attempt with aggressive cleaning
-       return JSON.parse(s.replace(/[\r\n\t]/g, ' '));
-     } catch (finalError) {
-       console.error("JSON Parse Failed Details:", finalError, "\nInput (truncated):", s.substring(0, 200));
-       throw new Error(`JSON parsing failed: ${finalError.message}`);
-     }
+    console.warn("Primary parse failed, trying relaxed approach:", e.message);
+    try {
+      // Only one more attempt with aggressive cleaning (newlines to spaces)
+      const cleaned = s.replace(/[\r\n\t]/g, ' ');
+      const result = JSON.parse(cleaned);
+      console.log("JSON parsed successfully with relaxed approach");
+      return result;
+    } catch (finalError) {
+      console.error("JSON Parse Failed Details:", finalError.message);
+      console.error("Failed JSON preview:", s.substring(0, 200));
+      // Return null or throw? The caller should handle it.
+      throw new Error(`JSON parsing failed: ${finalError.message}. Preview: ${s.substring(0, 100)}`);
+    }
   }
 }
 
@@ -198,14 +234,70 @@ async function* askLLM(history) {
       if (chunk.content) yield chunk.content;
     }
   } catch (e) {
-    console.warn("Stream failed, falling back to fetch", e);
-    const res = await fetch(url, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ ...body, stream: false })
-    });
-    const data = await res.json();
-    yield data.choices?.[0]?.message?.content || "";
+    console.warn("Stream failed, falling back to fetch...", e);
+    try {
+        const res = await fetch(url, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ ...body, stream: false })
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        yield data.choices?.[0]?.message?.content || "";
+    } catch (fetchError) {
+        console.warn("Offline Mode: LLM request failed.", fetchError.message);
+        
+        // Show Offline Toast only once per session to avoid spam
+        if (!state.offlineToastShown) {
+           showAlert('warning', 'Network Issue: Switched to Offline Simulation Mode.');
+           state.offlineToastShown = true;
+        }
+
+        const lastUserMsg = history[history.length-1].content || "";
+        if (lastUserMsg.includes("Generate 5 unique NPCs")) {
+             yield JSON.stringify([
+                 {"id":"n1","name":"Mock Manager","role":"Manager","personality":"Stoic","avatar":"👔"},
+                 {"id":"n2","name":"Mock Chef","role":"Head Chef","personality":"Angry","avatar":"👨‍🍳"}
+             ]);
+        } else if (lastUserMsg.includes("opening story plot")) {
+             yield JSON.stringify({
+                 "plot_summary": "Network Offline: You are managing the store in manual mode.",
+                 "opening_narrative": "The AI servers are currently unreachable. You must rely on your own instincts to run this restaurant. Good luck!"
+             });
+        } else if (lastUserMsg.includes("Create a management scenario")) {
+             // Mock Scenario
+             yield JSON.stringify({
+                "title": "Network Outage",
+                "description": "Communication systems are down. You need to make a decision without external data.",
+                "involvedNPCs": [],
+                "urgency": "high",
+                "questionType": "multiple-choice",
+                "data": {
+                  "options": [
+                    { 
+                      "text": "Focus on Staff Morale", 
+                      "consequences": {"staffMorale": 5},
+                      "npcReaction": {"npcName": "System", "mood": "neutral", "dialogue": "Understood."},
+                      "futureContext": "Staff is reassured."
+                    },
+                    { 
+                      "text": "Focus on Efficiency", 
+                      "consequences": {"efficiency": 5},
+                      "npcReaction": {"npcName": "System", "mood": "neutral", "dialogue": "Speed is key."},
+                      "futureContext": "Operations are faster."
+                    }
+                  ]
+                }
+             });
+        } else {
+             // Generic conversation/decision fallback
+             yield JSON.stringify({
+                 "reply": "I cannot connect to the AI brain right now. Please check your connection.",
+                 "kpi_impact": {},
+                 "thought_process": "Offline mode"
+             });
+        }
+    }
   }
 }
 
@@ -923,7 +1015,83 @@ Format:
     };
   }
 
-  async startGame() {
+  async initializeStory() {
+  const prompt = `Create a short, engaging opening story plot for a game where the user plays as a ${this.selectedRole.name} in the ${this.selectedIndustry.name} industry.
+  Current Situation: Starting a new job/position.
+  KPIs: ${Object.entries(this.selectedRole.startingKPIs).map(([k,v]) => `${k}:${v}`).join(', ')}.
+  
+  Output JSON format:
+  {
+    "plot_summary": "One sentence summary of the current situation",
+    "opening_narrative": "A paragraph describing the scene and the immediate challenge."
+  }`;
+  
+  try {
+     const responseStream = await this.askLLM([{ role: 'user', content: prompt }]);
+     let fullText = "";
+     for await (const chunk of responseStream) {
+       // Snapshot detection: if chunk starts with fullText, it's a resend
+       if (chunk.startsWith(fullText) && fullText.length > 0) {
+         fullText = chunk;
+       } else {
+         fullText += chunk;
+       }
+     }
+     
+     if (!fullText || !fullText.trim()) {
+        console.warn("Empty response from LLM for story initialization");
+        throw new Error("Empty response");
+     }
+
+     let data;
+     try {
+       data = parseRelaxedJSON(fullText);
+     } catch (e) {
+       // If JSON fails but we have text, assume text is the narrative
+       data = { plot_summary: "Starting a new venture.", opening_narrative: fullText };
+     }
+     
+     if (!data) {
+        data = { plot_summary: "Starting a new venture.", opening_narrative: "You have arrived at your new workplace." };
+     }
+
+     this.storyline = [{ 
+       type: 'initial', 
+       summary: data.plot_summary || "New Beginnings", 
+       text: data.opening_narrative || "You have just started your new role."
+     }];
+
+     // Show the story immediately
+     this.container.innerHTML = `
+      <div class="min-vh-100 d-flex flex-column justify-content-center align-items-center text-white p-5" 
+           style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);">
+        <div class="card bg-dark border-light shadow-lg" style="max-width: 800px;">
+          <div class="card-body p-5">
+            <h2 class="text-primary mb-4"><i class="bi bi-book me-2"></i>The Story Begins...</h2>
+            <div class="lead mb-4" style="line-height: 1.8;">
+              ${data.opening_narrative || fullText || "Welcome to the game."}
+            </div>
+            <button id="story-continue-btn" class="btn btn-primary btn-lg">
+              <i class="bi bi-arrow-right me-2"></i>Continue
+            </button>
+          </div>
+        </div>
+      </div>
+     `;
+     
+     await new Promise(resolve => {
+        const btn = document.getElementById('story-continue-btn');
+        if(btn) btn.onclick = resolve;
+        else resolve();
+     });
+
+  } catch (e) {
+     console.warn("Story Init Error", e);
+     this.storyline = [{ type: 'initial', summary: "New Job", text: "You have arrived at your new workplace." }];
+  }
+}
+
+async startGame() {
     this.gameStarted = true;
     
     this.container.innerHTML = `
@@ -949,9 +1117,17 @@ Format:
       }
     }
     
+    // Initialize NPC Memory
+    this.npcMemories = {};
+    this.npcs.forEach(n => {
+        if(!n.id) n.id = n.name.toLowerCase().replace(/\s/g, '-');
+        this.npcMemories[n.id] = [];
+    });
+
     this.currentDay = 1;
     this.gameLog = [];
     this.scenarioHistory = [];
+    this.storyline = [];
     
     // Initialize Game Systems
     this.purchasedUpgrades = [];
@@ -968,6 +1144,9 @@ Format:
       { name: "Viral Review", effect: "Reputation scrutiny", context: "A food critic just posted about us." }
     ];
     this.currentDailyEvent = this.dailyEvents[0];
+
+    // Initialize Story Plot
+    await this.initializeStory();
 
     this.renderMorningBriefing();
   }
@@ -1289,6 +1468,7 @@ Context:
 - Daily Event: "${this.currentDailyEvent.name}" (${this.currentDailyEvent.context})
 - Daily Strategy: "${this.dailyStrategy ? this.dailyStrategy.name : 'Balanced'}" (${this.dailyStrategy ? this.dailyStrategy.description : ''})
 - Previous Decision Context: ${this.currentNarrativeContext || "None (First Scenario)"}
+- Story Arc: ${this.storyline ? this.storyline.slice(-3).map(s => s.summary).join(' -> ') : "Starting"}
 - Focus KPI: "${lowestKPI ? this.kpiDefinitions[lowestKPI.id].name : 'General Operations'}" is currently at ${lowestKPI ? lowestKPI.value : 'Stable'}%
 
 CRITICAL INSTRUCTION: Generate a scenario that is LOGICALLY CONNECTED to the Previous Decision Context.
@@ -2516,8 +2696,14 @@ Output JSON:
         
         const responseStream = await this.askLLM([{ role: 'user', content: prompt }]);
         let fullText = "";
-        for await (const chunk of responseStream) fullText += chunk;
-        if(fullText.includes("}{")) fullText = fullText.split("}{")[0] + "}"; // Quick stutter fix if needed
+        for await (const chunk of responseStream) {
+          // Snapshot detection: if chunk starts with fullText, it's a resend
+          if (chunk.startsWith(fullText) && fullText.length > 0) {
+            fullText = chunk;
+          } else {
+            fullText += chunk;
+          }
+        }
         const evalData = parseRelaxedJSON(fullText);
         
         const rating = evalData.rating.toLowerCase(); 
@@ -2560,7 +2746,19 @@ Output JSON:
 
     this.updateKPIsDisplay();
     this.addToActivityLog(`Task: ${result.text}`);
-    this.showOutcomeV2(result.outcome, result.consequences);
+    
+    // Update Storyline
+    if (result.futureContext) {
+        if(!this.storyline) this.storyline = [];
+        this.storyline.push({
+            type: 'decision',
+            summary: result.text.substring(0, 50),
+            text: result.futureContext
+        });
+        this.currentNarrativeContext = result.futureContext;
+    }
+
+    this.showOutcomeV2(result.outcome || result.futureContext || "Outcome Applied", result.consequences);
   }
 
   showOutcomeV2(outcomeText, consequences) {
@@ -2621,25 +2819,59 @@ Output JSON:
   async generateDynamicNPCs(industry) {
     const prompt = `Generate 5 unique NPCs for a "${industry.name}" workplace.
     Roles: Manager, Senior, Junior, Client, Rival.
-    JSON: [{"id":"n1","name":"Name","role":"Role","personality":"Trait","avatar":"👤"}]`;
+    
+    CRITICAL: Output ONLY a valid JSON array, no explanations or markdown.
+    Format: [{"id":"n1","name":"Name","role":"Role","personality":"Trait","avatar":"👤"}]`;
     
     try {
       const responseStream = await this.askLLM([{ role: 'user', content: prompt }]);
       let fullText = "";
-      for await (const chunk of responseStream) fullText += chunk;
+      for await (const chunk of responseStream) {
+        // Snapshot detection: if chunk starts with fullText, it's a resend
+        if (chunk.startsWith(fullText) && fullText.length > 0) {
+          fullText = chunk;
+        } else {
+          fullText += chunk;
+        }
+      }
+      
+      console.log("NPC Generation Response Length:", fullText.length);
+      
+      if (!fullText || !fullText.trim()) {
+        console.warn("Empty NPC generation response, using fallback NPCs");
+        return industry.npcs;
+      }
+      
       const data = parseRelaxedJSON(fullText);
-      return Array.isArray(data) ? data : industry.npcs; 
+      
+      if (!data) {
+        console.warn("parseRelaxedJSON returned null, using fallback NPCs");
+        return industry.npcs;
+      }
+      
+      if (Array.isArray(data) && data.length > 0) {
+        console.log(`Successfully generated ${data.length} NPCs`);
+        return data;
+      } else {
+        console.warn("Invalid NPC data structure, using fallback NPCs");
+        return industry.npcs;
+      }
     } catch(e) {
-      console.warn("NPC Gen Error", e);
+      console.warn("NPC Generation Error:", e.message);
+      console.warn("Using fallback NPCs from industry config");
       return industry.npcs;
     }
   }
 
   async triggerRandomNPCInteraction() {
-     if (Math.random() > 0.3) return; // 30% chance
-     const npc = this.npcs[Math.floor(Math.random() * this.npcs.length)];
-     await this.talkToNPC(npc, true);
-  }
+   if (Math.random() > 0.4) return; // 40% chance
+   const npc = this.npcs[Math.floor(Math.random() * this.npcs.length)];
+   
+   if (!this.npcMemories) this.npcMemories = {};
+   if (!this.npcMemories[npc.id]) this.npcMemories[npc.id] = [];
+   
+   await this.talkToNPC(npc, true);
+}
 
   advanceDay() {
     if (this.currentDay >= this.selectedDifficulty.daysToComplete) {
@@ -2652,58 +2884,88 @@ Output JSON:
   }
 
   async processChatTurn(npc, userMessage, context, appendMsg, modalEl) {
-    const prompt = `Conversational Roleplay.
+  // Retrieve Memory
+  if (!this.npcMemories) this.npcMemories = {};
+  if (!this.npcMemories[npc.id]) this.npcMemories[npc.id] = [];
+  const memory = this.npcMemories[npc.id];
+
+  // Construct System Prompt with Context Awareness
+  const currentStoryCtx = this.storyline && this.storyline.length ? this.storyline[this.storyline.length - 1].summary : "Daily Operations";
+  
+  const systemPrompt = `Conversational Roleplay.
 Character: ${npc.name} (${npc.role}). Personality: ${npc.personality}.
 User Role: ${this.selectedRole.name}.
 Current Environment: ${this.selectedIndustry.name}, Day ${this.currentDay}.
+Story Context: ${currentStoryCtx}.
 Current KPIs: ${Object.entries(this.kpis).map(([k,v]) => `${k}:${v}`).join(', ')}.
+
+Context Memory: You have spoken with the user before. Use the conversation history provided.
+GOAL: Act independently. You have your own feelings. If KPIs are low, you might be worried. If high, happy.
+If the user asks about something relevant to the Current Situation or Story, respond appropriately.
+If the user asks about another NPC (e.g. Jack), you can gossip or comment if you know them (assume you know your team).
 
 Task: valid JSON response only.
 1. "reply": Your response to the user. Keep it natural, concise (max 2 sentences).
-   - If User said "SYSTEM_PROACTIVE": You are INTERRUPTING with an URGENT issue/doubt.
-   - If User said "SYSTEM_GREETING": Greet the user casually.
-   - Otherwise: Respond to the user's message/question.
+ - If User said "SYSTEM_PROACTIVE": You are INTERRUPTING with an URGENT issue/doubt based on the Story Context or KPIs.
+ - If User said "SYSTEM_GREETING": Greet the user casually.
+ - Otherwise: Respond to the user's message/question.
 2. "kpi_impact": Any key-value changes to KPIs based on this turn (e.g., {"staffMorale": 1} if user was nice, {"reputation": -1} if user was rude). Empty {} if neutral.
+3. "thought_process": Internal thought explaining WHY you said this (for debugging/immersion).
 
 Input: "${userMessage}"
 
-Format: {"reply": "...", "kpi_impact": {}}`;
+Format: {"reply": "...", "kpi_impact": {}, "thought_process": "..."}`;
 
-    try {
-      const responseStream = await this.askLLM([{ role: 'user', content: prompt }]);
-      let fullText = "";
-      for await (const chunk of responseStream) {
-         if (chunk.startsWith(fullText) && fullText.length > 0) fullText = chunk; 
-         else fullText += chunk;
-      }
-      
-      let data;
-      try {
-        data = parseRelaxedJSON(fullText);
-      } catch (e) {
-        data = { reply: fullText.replace(/[*{}"]/g, '').substring(0, 100), kpi_impact: {} };
-      }
+  try {
+    // Build Message Chain: System -> [History] -> User Input
+    // We limit history to last 10 messages to save tokens/complexity if needed
+    const recentHistory = memory.slice(-10);
+    const messages = [
+       { role: 'system', content: systemPrompt },
+       ...recentHistory,
+       { role: 'user', content: userMessage }
+    ];
 
-      appendMsg('npc', data.reply || "...");
-      
-      // Apply KPIs silently
-      if (data.kpi_impact && Object.keys(data.kpi_impact).length > 0) {
-        Object.entries(data.kpi_impact).forEach(([k, v]) => {
-           // Basic update logic
-           if(this.kpis[k] !== undefined) this.kpis[k] += v;
-        });
-        this.updateKPIsDisplay();
-        // Optional: Show small toast inside modal?
-        const toast = document.createElement('div');
-        toast.className = 'small text-success ms-2';
-        toast.innerText = 'KPIs Updated';
-        modalEl.querySelector('.modal-header').appendChild(toast);
-        setTimeout(() => toast.remove(), 2000);
-      }
-
-    } catch (e) {
-      console.error(e);
-      appendMsg('npc', "(Connection error)");
+    const responseStream = await this.askLLM(messages);
+    let fullText = "";
+    for await (const chunk of responseStream) {
+       if (chunk.startsWith(fullText) && fullText.length > 0) fullText = chunk; 
+       else fullText += chunk;
     }
+    
+    let data;
+    try {
+      data = parseRelaxedJSON(fullText);
+    } catch (e) {
+      data = { reply: fullText.replace(/[*{}\"]/g, '').substring(0, 100), kpi_impact: {} };
+    }
+
+    appendMsg('npc', data.reply || "...");
+    
+    // Update Memory
+    this.npcMemories[npc.id].push({ role: 'user', content: userMessage });
+    this.npcMemories[npc.id].push({ role: 'assistant', content: data.reply });
+
+    // Apply KPIs silently
+    if (data.kpi_impact && Object.keys(data.kpi_impact).length > 0) {
+      Object.entries(data.kpi_impact).forEach(([k, v]) => {
+         if(this.kpis[k] !== undefined) this.kpis[k] += v;
+      });
+      this.updateKPIsDisplay();
+      
+      const toast = document.createElement('div');
+      toast.className = 'small text-success ms-2';
+      toast.innerText = 'KPIs Updated';
+      if (modalEl && modalEl.querySelector) {
+          const header = modalEl.querySelector('.modal-header');
+          if(header) header.appendChild(toast);
+      }
+      setTimeout(() => toast.remove(), 2000);
+    }
+
+  } catch (e) {
+    console.error(e);
+    appendMsg('npc', "(Connection error)");
   }
+}
 }
