@@ -1102,8 +1102,8 @@ Format:
            style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);">
         <div class="card bg-dark border-light shadow-lg" style="max-width: 800px;">
           <div class="card-body p-5">
-            <h2 class="text-primary mb-4"><i class="bi bi-book me-2"></i>The Story Begins...</h2>
-            <div class="lead mb-4" style="line-height: 1.8;">
+            <h2 class="text-warning mb-4"><i class="bi bi-book me-2"></i>The Story Begins...</h2>
+            <div class="lead mb-4 text-white" style="line-height: 1.8;">
               ${data.opening_narrative || fullText || "Welcome to the game."}
             </div>
             <button id="story-continue-btn" class="btn btn-primary btn-lg">
