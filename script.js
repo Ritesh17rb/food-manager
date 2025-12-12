@@ -80,7 +80,18 @@ function parseRelaxedJSON(str) {
   
   // Remove any control characters
   s = s.replace(/[\x00-\x1F\x7F]/g, '');
+
+  // Fix positive numbers with plus sign (e.g. : +5 -> : 5)
+  s = s.replace(/:\s*\+(\d+)/g, ': $1');
   
+  // Attempt to fix unescaped quotes within values
+  // This helps when the LLM outputs: "description": "He said "Hello" to me"
+  // It's heuristic and risky but helps with common LLM errors
+  s = s.replace(/:\s*"([^"]*(?:"[^"]*)*)"/g, (match, content) => {
+      // Don't modify the outer quotes/structure
+      return match; 
+  });
+
   try {
     const result = JSON.parse(s);
     console.log("JSON parsed successfully");
@@ -88,16 +99,19 @@ function parseRelaxedJSON(str) {
   } catch (e) {
     console.warn("Primary parse failed, trying relaxed approach:", e.message);
     try {
-      // Only one more attempt with aggressive cleaning (newlines to spaces)
-      const cleaned = s.replace(/[\r\n\t]/g, ' ');
-      const result = JSON.parse(cleaned);
+      // 1. Aggressive cleaning: newlines to spaces
+      let cleaned = s.replace(/[\r\n\t]/g, ' ');
+      
+      // 2. Fix unescaped quotes in descriptions manually if simple check fails
+      // Look for "key": "value" patterns and try to salvage
+      
+      const result = JSON.parse(cleaned); 
       console.log("JSON parsed successfully with relaxed approach");
       return result;
     } catch (finalError) {
       console.error("JSON Parse Failed Details:", finalError.message);
-      console.error("Failed JSON preview:", s.substring(0, 200));
-      // Return null or throw? The caller should handle it.
-      throw new Error(`JSON parsing failed: ${finalError.message}. Preview: ${s.substring(0, 100)}`);
+      // Last ditch: try to just return a basic error object so game doesn't crash
+      throw new Error(`JSON parsing failed: ${finalError.message}. Content was: ${s.substring(0, 50)}...`);
     }
   }
 }
@@ -397,7 +411,7 @@ class ManagementGame {
     
     // Game state
     this.gameStarted = false;
-    this.questionsAnswered = 0; // New: Track questions for NPC intrusion
+    this.questionsAnswered = 0; // Track questions for NPC intrusion
     this.selectedIndustry = null;
     this.selectedRole = null;
     this.selectedDifficulty = null;
@@ -406,6 +420,27 @@ class ManagementGame {
     this.npcs = [];
     this.gameLog = [];
     this.scenarioHistory = [];
+    
+    // Enhanced NPC System
+    this.npcRelationships = {}; // Track relationship scores with each NPC
+    this.npcEmotionalStates = {}; // Track current emotional state of each NPC
+    this.npcMemories = {}; // Conversation history with each NPC
+    this.pendingClarifications = []; // NPCs waiting to question decisions
+    this.detailedDecisionHistory = []; // Track decisions with full context
+    
+    // Live Restaurant Simulation
+    this.liveSimulation = {
+      tables: [],
+      activeOrders: [], 
+      customerQueue: 0, 
+      totalCustomersToday: 0,
+      totalSalesToday: 0,
+      recentChaos: null, 
+      simulationInterval: null,
+      eventInterval: null
+    };
+
+    this.prevKpis = {}; // Track history for trends
     
     // Custom industry support
     this.isCustomIndustry = false;
@@ -1117,11 +1152,15 @@ async startGame() {
       }
     }
     
-    // Initialize NPC Memory
+    // Initialize NPC Memory, Relationships, and Emotional States
     this.npcMemories = {};
+    this.npcRelationships = {};
+    this.npcEmotionalStates = {};
     this.npcs.forEach(n => {
         if(!n.id) n.id = n.name.toLowerCase().replace(/\s/g, '-');
         this.npcMemories[n.id] = [];
+        this.npcRelationships[n.id] = n.baseRelationship || 50; // 0-100 scale
+        this.npcEmotionalStates[n.id] = 'neutral'; // Start neutral
     });
 
     this.currentDay = 1;
@@ -1274,6 +1313,7 @@ async startGame() {
 
   startNewDay() {
     this.renderGameScreen();
+    this.initializeLiveSimulation(); // Start the live restaurant simulation
     this.generateScenario();
   }
 
@@ -1337,6 +1377,84 @@ async startGame() {
         <div class="container-fluid mb-3">
           <div class="row" id="kpis-container">
             ${kpisHTML}
+          </div>
+        </div>
+
+        <!-- Live Restaurant Activity (Collapsible) -->
+        <div class="container-fluid mb-3">
+          <div class="card bg-dark border-warning">
+            <div class="card-header bg-transparent border-warning" 
+                 style="cursor: pointer;" 
+                 data-bs-toggle="collapse" 
+                 data-bs-target="#live-activity-panel">
+              <div class="d-flex align-items-center justify-content-between">
+                <h6 class="mb-0">
+                  <i class="bi bi-broadcast text-warning me-2"></i>
+                  <span class="text-warning">LIVE</span> Restaurant Activity
+                  <span class="badge bg-warning text-dark ms-2" id="live-customer-count">0 customers</span>
+                </h6>
+                <i class="bi bi-chevron-down text-warning"></i>
+              </div>
+            </div>
+            <div class="collapse show" id="live-activity-panel">
+              <div class="card-body p-3">
+                <div class="row g-2">
+                  <!-- Tables Status -->
+                  <div class="col-md-4">
+                    <div class="card bg-secondary bg-opacity-25 border-0 h-100">
+                      <div class="card-body p-2">
+                        <div class="small text-white-50 mb-2">
+                          <i class="bi bi-table me-1"></i>Tables
+                        </div>
+                        <div class="d-flex flex-wrap gap-1" id="tables-status">
+                          <!-- Tables will be dynamically populated -->
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Current Orders -->
+                  <div class="col-md-4">
+                    <div class="card bg-secondary bg-opacity-25 border-0 h-100">
+                      <div class="card-body p-2">
+                        <div class="small text-white-50 mb-2">
+                          <i class="bi bi-receipt me-1"></i>Active Orders
+                        </div>
+                        <div id="active-orders" style="max-height: 120px; overflow-y: auto; font-size: 0.75rem;">
+                          <!-- Orders will be dynamically populated -->
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Decision History -->
+                  <div class="col-md-4">
+                    <div class="card bg-secondary bg-opacity-25 border-0 h-100">
+                      <div class="card-body p-2">
+                        <div class="small text-white-50 mb-2">
+                          <i class="bi bi-clock-history me-1"></i>Recent Decisions
+                        </div>
+                        <div id="decision-history" style="max-height: 120px; overflow-y: auto; font-size: 0.75rem;">
+                          <!-- Recent decisions will be dynamically populated -->
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Live Feed -->
+                <div class="mt-2">
+                  <div class="small text-white-50 mb-1">
+                    <i class="bi bi-activity me-1"></i>Live Feed
+                  </div>
+                  <div id="live-feed" 
+                       class="bg-black bg-opacity-50 rounded p-2" 
+                       style="max-height: 100px; overflow-y: auto; font-size: 0.7rem; font-family: monospace;">
+                    <div class="text-success">System initialized...</div>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -1426,7 +1544,407 @@ async startGame() {
     });
   }
 
+  // ===== LIVE RESTAURANT SIMULATION =====
+  
+  initializeLiveSimulation() {
+    // Initialize tables (12 tables for a small restaurant)
+    this.liveSimulation.tables = Array.from({length: 12}, (_, i) => ({
+      id: i + 1,
+      occupied: false,
+      customers: 0,
+      order: null,
+      timeSeated: null
+    }));
+    
+    this.updateTablesDisplay();
+    
+    // Start simulation loops
+    this.liveSimulation.simulationInterval = setInterval(() => this.runSimulationTick(), 3000); // Every 3 seconds
+    this.liveSimulation.eventInterval = setInterval(() => this.generateLiveEvent(), 15000); // Every 15 seconds
+    
+    this.addToLiveFeed('Restaurant opened for business!', 'success');
+  }
+
+  stopLiveSimulation() {
+    if (this.liveSimulation.simulationInterval) {
+      clearInterval(this.liveSimulation.simulationInterval);
+    }
+    if (this.liveSimulation.eventInterval) {
+      clearInterval(this.liveSimulation.eventInterval);
+    }
+  }
+
+  runSimulationTick() {
+    // Customer arrival logic
+    const arrivalChance = 0.4; // 40% chance per tick
+    const efficiency = this.kpis.efficiency || 65;
+    const reputation = this.kpis.reputation || 60;
+    
+    // Higher efficiency and reputation = more customers
+    const adjustedChance = arrivalChance * (reputation / 60) * (efficiency / 65);
+    
+    if (Math.random() < adjustedChance) {
+      this.handleCustomerArrival();
+    }
+    
+    // Process existing orders
+    this.processOrders();
+    
+    // Check for customers leaving
+    this.checkCustomerDepartures();
+    
+    // Update displays
+    this.updateTablesDisplay();
+    this.updateOrdersDisplay();
+  }
+
+  handleCustomerArrival() {
+    const partySize = Math.random() < 0.7 ? Math.floor(Math.random() * 2) + 2 : Math.floor(Math.random() * 4) + 1; // 2-3 people usually, sometimes 1-4
+    
+    // Find available table
+    const availableTable = this.liveSimulation.tables.find(t => !t.occupied);
+    
+    if (availableTable) {
+      availableTable.occupied = true;
+      availableTable.customers = partySize;
+      availableTable.timeSeated = Date.now();
+      
+      this.liveSimulation.totalCustomersToday += partySize;
+      
+      // Generate order after a delay
+      setTimeout(() => this.generateOrder(availableTable), Math.random() * 2000 + 1000);
+      
+      this.addToLiveFeed(`👥 Party of ${partySize} seated at Table ${availableTable.id}`, 'info');
+      
+      // Update customer count
+      this.updateCustomerCount();
+    } else {
+      this.liveSimulation.customerQueue++;
+      this.addToLiveFeed(`⏳ ${partySize} customers waiting (no tables available)`, 'warning');
+      
+      // Negative impact on satisfaction if queue builds up
+      if (this.liveSimulation.customerQueue > 3) {
+        this.kpis.customerSatisfaction = Math.max(0, this.kpis.customerSatisfaction - 1);
+        this.updateKPIsDisplay();
+      }
+    }
+  }
+
+  generateOrder(table) {
+    if (!table.occupied) return;
+    
+    const menuItems = [
+      {name: 'Burger Combo', price: 12, uses: {burgerPatties: 1, friesStock: 1, beverageSyrup: 1, packagingSupplies: 1}},
+      {name: 'Chicken Sandwich', price: 10, uses: {chickenBreasts: 1, friesStock: 1, packagingSupplies: 1}},
+      {name: 'Fries & Drink', price: 6, uses: {friesStock: 2, beverageSyrup: 1, packagingSupplies: 1}},
+      {name: 'Double Burger', price: 15, uses: {burgerPatties: 2, friesStock: 1, beverageSyrup: 1, packagingSupplies: 1}},
+      {name: 'Chicken Nuggets', price: 8, uses: {chickenBreasts: 1, packagingSupplies: 1}}
+    ];
+    
+    // Generate order for each customer
+    const orderItems = [];
+    let totalPrice = 0;
+    
+    for (let i = 0; i < table.customers; i++) {
+      const item = menuItems[Math.floor(Math.random() * menuItems.length)];
+      orderItems.push(item);
+      totalPrice += item.price;
+    }
+    
+    const order = {
+      tableId: table.id,
+      items: orderItems,
+      totalPrice,
+      status: 'pending',
+      placedAt: Date.now()
+    };
+    
+    table.order = order;
+    this.liveSimulation.activeOrders.push(order);
+    
+    this.addToLiveFeed(`📝 Table ${table.id} ordered: ${orderItems.map(i => i.name).join(', ')} ($${totalPrice})`, 'info');
+    this.updateOrdersDisplay();
+    
+    // Start cooking
+    setTimeout(() => this.cookOrder(order), Math.random() * 3000 + 2000);
+  }
+
+  cookOrder(order) {
+    if (order.status !== 'pending') return;
+    
+    order.status = 'cooking';
+    this.addToLiveFeed(`🔥 Preparing Table ${order.tableId}'s order`, 'primary');
+    
+    // Deduct inventory
+    order.items.forEach(item => {
+      Object.entries(item.uses).forEach(([kpi, amount]) => {
+        if (this.kpis[kpi] !== undefined) {
+          this.kpis[kpi] = Math.max(0, this.kpis[kpi] - amount);
+        }
+      });
+    });
+    
+    this.updateKPIsDisplay();
+    
+    // Cooking time based on efficiency
+    const efficiency = this.kpis.efficiency || 65;
+    const cookTime = (100 - efficiency) * 50 + Math.random() * 2000; // Lower efficiency = longer cook time
+    
+    setTimeout(() => this.serveOrder(order), cookTime);
+  }
+
+  serveOrder(order) {
+    if (order.status !== 'cooking') return;
+    
+    order.status = 'served';
+    
+    // Add to sales
+    this.kpis.sales = (this.kpis.sales || 0) + order.totalPrice;
+    this.kpis.budget = (this.kpis.budget || 0) + order.totalPrice;
+    this.liveSimulation.totalSalesToday += order.totalPrice;
+    
+    this.addToLiveFeed(`✅ Table ${order.tableId} served! +$${order.totalPrice}`, 'success');
+    this.updateKPIsDisplay();
+    
+    // Remove from active orders
+    const index = this.liveSimulation.activeOrders.indexOf(order);
+    if (index > -1) {
+      this.liveSimulation.activeOrders.splice(index, 1);
+    }
+    
+    this.updateOrdersDisplay();
+    
+    // Customers will leave after eating
+    setTimeout(() => this.handleCustomerDeparture(order.tableId), Math.random() * 3000 + 2000);
+  }
+
+  handleCustomerDeparture(tableId) {
+    const table = this.liveSimulation.tables.find(t => t.id === tableId);
+    if (!table || !table.occupied) return;
+    
+    const satisfaction = this.kpis.customerSatisfaction || 75;
+    const timeSpent = Date.now() - table.timeSeated;
+    
+    // If service was too slow, reduce satisfaction
+    if (timeSpent > 30000) { // More than 30 seconds in simulation time
+      this.kpis.customerSatisfaction = Math.max(0, satisfaction - 2);
+      this.addToLiveFeed(`😐 Table ${tableId} left (slow service)`, 'warning');
+    } else {
+      // Small chance of positive feedback
+      if (Math.random() < 0.3) {
+        this.kpis.customerSatisfaction = Math.min(100, satisfaction + 1);
+        this.kpis.reputation = Math.min(100, (this.kpis.reputation || 60) + 0.5);
+        this.addToLiveFeed(`😊 Table ${tableId} left happy!`, 'success');
+      } else {
+        this.addToLiveFeed(`👋 Table ${tableId} left`, 'secondary');
+      }
+    }
+    
+    // Clear table
+    table.occupied = false;
+    table.customers = 0;
+    table.order = null;
+    table.timeSeated = null;
+    
+    // Seat waiting customers if any
+    if (this.liveSimulation.customerQueue > 0) {
+      this.liveSimulation.customerQueue--;
+      setTimeout(() => this.handleCustomerArrival(), 500);
+    }
+    
+    this.updateCustomerCount();
+    this.updateTablesDisplay();
+    this.updateKPIsDisplay();
+  }
+
+  checkCustomerDepartures() {
+    // Randomly check if any served customers are ready to leave
+    this.liveSimulation.tables.forEach(table => {
+      if (table.occupied && table.order && table.order.status === 'served') {
+        if (Math.random() < 0.3) { // 30% chance per tick
+          this.handleCustomerDeparture(table.id);
+        }
+      }
+    });
+  }
+
+  processOrders() {
+    // Check for stuck orders (quality issues)
+    const staffMorale = this.kpis.staffMorale || 70;
+    const equipmentCondition = this.kpis.equipmentCondition || 80;
+    
+    this.liveSimulation.activeOrders.forEach(order => {
+      if (order.status === 'cooking') {
+        const timeCooking = Date.now() - order.placedAt;
+        
+        // Base mistake chance (human error) + Morale/Equipment factors
+        let mistakeChance = 0.02; // 2% base chance per tick
+        if (staffMorale < 60) mistakeChance += 0.05;
+        if (equipmentCondition < 60) mistakeChance += 0.05;
+        if (this.liveSimulation.activeOrders.length > 8) mistakeChance += 0.05; // Overwhelmed
+
+        // If cooking too long, chance increases drastically
+        if (timeCooking > 12000) mistakeChance += 0.1;
+
+        if (Math.random() < mistakeChance) { 
+          this.addToLiveFeed(`🔥 Order for Table ${order.tableId} burned! Remaking...`, 'danger');
+          this.liveSimulation.recentChaos = "Burned Food";
+          
+          this.kpis.wastePercentage = Math.min(100, (this.kpis.wastePercentage || 12) + 2);
+          this.kpis.customerSatisfaction = Math.max(0, this.kpis.customerSatisfaction - 2);
+          
+          // Reset cooking time (remake)
+          order.placedAt = Date.now(); 
+          
+          this.updateKPIsDisplay();
+        }
+      }
+    });
+  }
+
+  async generateLiveEvent() {
+    // LLM generates random events based on current state
+    const currentState = {
+      occupiedTables: this.liveSimulation.tables.filter(t => t.occupied).length,
+      totalTables: this.liveSimulation.tables.length,
+      activeOrders: this.liveSimulation.activeOrders.length,
+      customerQueue: this.liveSimulation.customerQueue,
+      salesToday: this.liveSimulation.totalSalesToday,
+      customersToday: this.liveSimulation.totalCustomersToday,
+      staffMorale: this.kpis.staffMorale,
+      efficiency: this.kpis.efficiency,
+      burgerPatties: this.kpis.burgerPatties,
+      chickenBreasts: this.kpis.chickenBreasts
+    };
+    
+    // Only generate events occasionally and if there's activity
+    if (Math.random() > 0.4 || currentState.occupiedTables === 0) return;
+    
+    const prompt = `You are simulating a live restaurant. Current state:
+- ${currentState.occupiedTables}/${currentState.totalTables} tables occupied
+- ${currentState.activeOrders} active orders
+- ${currentState.customerQueue} customers waiting
+- $${currentState.salesToday} sales today
+- ${currentState.customersToday} customers served
+- Staff morale: ${currentState.staffMorale}%
+- Efficiency: ${currentState.efficiency}%
+- Burger patties: ${currentState.burgerPatties} units
+- Chicken: ${currentState.chickenBreasts} units
+
+Generate a SHORT, realistic restaurant event (1 sentence). Examples:
+- "A customer compliments the chef on the burger quality"
+- "The fryer is making unusual noises"
+- "A family with kids just walked in"
+- "Someone left a 5-star review on their phone"
+- "The lunch rush is starting to pick up"
+
+Output ONLY the event text, no JSON, no quotes.`;
+
+    try {
+      const responseStream = await this.askLLM([{ role: 'user', content: prompt }]);
+      let eventText = "";
+      for await (const chunk of responseStream) {
+        if (chunk.startsWith(eventText) && eventText.length > 0) {
+          eventText = chunk;
+        } else {
+          eventText += chunk;
+        }
+      }
+      
+      eventText = eventText.trim().replace(/^["']|["']$/g, ''); // Remove quotes
+      if (eventText && eventText.length < 150) {
+        this.addToLiveFeed(`📢 ${eventText}`, 'info');
+      }
+    } catch (e) {
+      // Silently fail for live events
+      console.log('Live event generation skipped');
+    }
+  }
+
+  // Display update functions
+  updateTablesDisplay() {
+    const tablesContainer = $('#tables-status');
+    if (!tablesContainer) return;
+    
+    tablesContainer.innerHTML = this.liveSimulation.tables.map(table => {
+      const color = table.occupied ? 'danger' : 'success';
+      const icon = table.occupied ? '🔴' : '🟢';
+      return `<div class="badge bg-${color} bg-opacity-50" title="Table ${table.id}: ${table.occupied ? table.customers + ' customers' : 'Available'}">${icon} ${table.id}</div>`;
+    }).join('');
+  }
+
+  updateOrdersDisplay() {
+    const ordersContainer = $('#active-orders');
+    if (!ordersContainer) return;
+    
+    if (this.liveSimulation.activeOrders.length === 0) {
+      ordersContainer.innerHTML = '<div class="text-white-50 text-center py-2">No active orders</div>';
+    } else {
+      ordersContainer.innerHTML = this.liveSimulation.activeOrders.map(order => {
+        const statusColors = {pending: 'warning', cooking: 'primary', served: 'success'};
+        const statusIcons = {pending: '⏳', cooking: '🔥', served: '✅'};
+        return `<div class="d-flex justify-content-between align-items-center mb-1 p-1 bg-secondary bg-opacity-25 rounded">
+          <span>${statusIcons[order.status]} Table ${order.tableId}</span>
+          <span class="badge bg-${statusColors[order.status]}">${order.status}</span>
+        </div>`;
+      }).join('');
+    }
+  }
+
+  updateDecisionHistory(decisionText) {
+    const historyContainer = $('#decision-history');
+    if (!historyContainer) return;
+    
+    const entry = document.createElement('div');
+    entry.className = 'text-white-50 mb-1';
+    entry.innerHTML = `<i class="bi bi-check-circle text-success me-1"></i>${decisionText}`;
+    historyContainer.insertBefore(entry, historyContainer.firstChild);
+    
+    // Keep only last 5 entries
+    while (historyContainer.children.length > 5) {
+      historyContainer.removeChild(historyContainer.lastChild);
+    }
+  }
+
+  updateCustomerCount() {
+    const countBadge = $('#live-customer-count');
+    if (!countBadge) return;
+    
+    const currentCustomers = this.liveSimulation.tables
+      .filter(t => t.occupied)
+      .reduce((sum, t) => sum + t.customers, 0);
+    
+    countBadge.textContent = `${currentCustomers} customer${currentCustomers !== 1 ? 's' : ''}`;
+  }
+
+  addToLiveFeed(message, type = 'secondary') {
+    const feed = $('#live-feed');
+    if (!feed) return;
+    
+    const colors = {
+      success: 'text-success',
+      danger: 'text-danger',
+      warning: 'text-warning',
+      info: 'text-info',
+      primary: 'text-primary',
+      secondary: 'text-white-50'
+    };
+    
+    const entry = document.createElement('div');
+    entry.className = colors[type] || colors.secondary;
+    const timestamp = new Date().toLocaleTimeString();
+    entry.textContent = `[${timestamp}] ${message}`;
+    
+    feed.insertBefore(entry, feed.firstChild);
+    
+    // Keep only last 10 entries
+    while (feed.children.length > 10) {
+      feed.removeChild(feed.lastChild);
+    }
+  }
+
   async generateScenario() {
+
     const scenarioContainer = $('#scenario-container');
     scenarioContainer.innerHTML = `
       <div class="d-flex flex-column justify-content-center align-items-center h-100">
@@ -1436,96 +1954,276 @@ async startGame() {
     `;
 
     // 1. Identify Critical KPI (lowest normalized score)
-    // Budget can be high, so we ignore it for "crisis" finding unless it's near 0
-    // We normalize budget/sales for comparison, but simple sorting of percentage based KPIs is better
     const criticalKPIs = Object.entries(this.kpis)
       .filter(([k]) => k !== 'budget' && k !== 'sales')
       .sort(([, a], [, b]) => a - b);
     const lowestKPI = criticalKPIs[0] ? { id: criticalKPIs[0][0], value: criticalKPIs[0][1] } : null;
 
-    // 2. Select Relevant NPC
-    // Try to match NPC role to the KPI if possible, otherwise random
-    let relevantNPC = this.npcs[Math.floor(Math.random() * this.npcs.length)];
+    // 2. Select Relevant NPC based on KPI category and NPC expertise
+    let relevantNPC = null;
+    
     if (lowestKPI) {
-       // Simple heuristic mapping for Better Context
-       if (lowestKPI.id.includes('Food') || lowestKPI.id.includes('inventory')) {
-          const chef = this.npcs.find(n => n.role.includes('Chef') || n.role.includes('Supplier'));
-          if (chef) relevantNPC = chef;
-       } else if (lowestKPI.id.includes('Satisfaction') || lowestKPI.id.includes('Reputation')) {
-          const front = this.npcs.find(n => n.role.includes('Customer') || n.role.includes('Cashier') || n.role.includes('Front'));
-          if (front) relevantNPC = front;
-       } else if (lowestKPI.id.includes('Staff') || lowestKPI.id.includes('Morale')) {
-           const sup = this.npcs.find(n => n.role.includes('Supervisor') || n.role.includes('Manager'));
-           if (sup) relevantNPC = sup;
-       }
+      const kpiInfo = this.kpiDefinitions[lowestKPI.id];
+      const kpiCategory = kpiInfo?.category || 'operations';
+      
+      // Map KPI categories and specific KPIs to expertise areas
+      const expertiseMap = {
+        // Inventory items -> food/inventory experts
+        'burgerPatties': ['food quality', 'inventory management', 'supply chain'],
+        'chickenBreasts': ['food quality', 'inventory management', 'supply chain'],
+        'friesStock': ['food quality', 'inventory management', 'supply chain'],
+        'beverageSyrup': ['inventory management', 'supply chain'],
+        'packagingSupplies': ['inventory management', 'supply chain'],
+        
+        // Customer-facing KPIs
+        'customerSatisfaction': ['customer service', 'customer interaction', 'customer perspective'],
+        'reputation': ['customer service', 'customer perspective', 'community sentiment'],
+        
+        // Staff KPIs
+        'staffMorale': ['staff scheduling', 'compliance', 'staff management'],
+        
+        // Operations KPIs
+        'efficiency': ['operations', 'workflow'],
+        'equipmentCondition': ['equipment maintenance', 'safety compliance'],
+        'wastePercentage': ['food quality', 'operations', 'cost-saving repairs']
+      };
+      
+      // Get relevant expertise areas for this KPI
+      const relevantExpertise = expertiseMap[lowestKPI.id] || [];
+      
+      // Find NPCs with matching expertise, excluding external stakeholders for internal issues
+      const internalRoles = ['Chef', 'Supervisor', 'Manager', 'Lead', 'Technician'];
+      const externalRoles = ['Customer', 'Client', 'Supplier'];
+      
+      // For internal operations, only use internal NPCs
+      const isInternalIssue = ['inventory', 'staff', 'operations'].includes(kpiCategory) || 
+                              lowestKPI.id.includes('Morale') || 
+                              lowestKPI.id.includes('efficiency') ||
+                              lowestKPI.id.includes('equipment') ||
+                              lowestKPI.id.includes('waste');
+      
+      let candidateNPCs = this.npcs.filter(npc => {
+        // Filter out external stakeholders for internal issues
+        if (isInternalIssue) {
+        if (isInternalIssue) {
+          const isExternal = externalRoles.some(role => npc.role.includes(role)) || npc.role.toLowerCase().includes('rival');
+          if (isExternal) return false;
+        }
+        }
+        
+        // Check if NPC has relevant expertise
+        if (npc.expertise && relevantExpertise.length > 0) {
+          return npc.expertise.some(exp => 
+            relevantExpertise.some(reqExp => 
+              exp.toLowerCase().includes(reqExp.toLowerCase()) ||
+              reqExp.toLowerCase().includes(exp.toLowerCase())
+            )
+          );
+        }
+        
+        // Fallback: check role keywords
+        if (lowestKPI.id.includes('Patties') || lowestKPI.id.includes('Chicken') || lowestKPI.id.includes('Fries')) {
+          return npc.role.includes('Chef') || npc.role.includes('Supplier');
+        }
+        if (lowestKPI.id.includes('Satisfaction') || lowestKPI.id.includes('Reputation')) {
+          return npc.role.includes('Lead') || npc.role.includes('Supervisor');
+        }
+        if (lowestKPI.id.includes('Staff') || lowestKPI.id.includes('Morale')) {
+          return npc.role.includes('Supervisor') || npc.role.includes('Manager');
+        }
+        if (lowestKPI.id.includes('equipment')) {
+          return npc.role.includes('Technician') || npc.role.includes('Maintenance');
+        }
+        
+        return false;
+      });
+      
+      // If we found matching NPCs, pick one (prefer higher relationship)
+      if (candidateNPCs.length > 0) {
+        // Sort by relationship (higher is better for constructive scenarios)
+        candidateNPCs.sort((a, b) => (this.npcRelationships[b.id] || 50) - (this.npcRelationships[a.id] || 50));
+        relevantNPC = candidateNPCs[0];
+      }
+    }
+    
+    // Fallback: if no relevant NPC found, pick an internal staff member (not customer/client)
+    // Fallback: if no relevant NPC found, pick an internal staff member
+    if (!relevantNPC) {
+      const internalNPCs = this.npcs.filter(npc => 
+        !npc.role.toLowerCase().includes('customer') && 
+        !npc.role.toLowerCase().includes('client') &&
+        !npc.role.toLowerCase().includes('rival') &&
+        !npc.role.toLowerCase().includes('competitor')
+      );
+      relevantNPC = internalNPCs.length > 0 ? 
+        internalNPCs[Math.floor(Math.random() * internalNPCs.length)] : 
+        this.npcs[0]; 
     }
 
-    const prompt = `You are a Strategy Game simulator engine.
-Context:
+
+    // Build detailed KPI status with specific values and warnings
+    const kpiStatus = Object.entries(this.kpis).map(([key, value]) => {
+      const kpiInfo = this.kpiDefinitions[key];
+      let status = 'normal';
+      let statusEmoji = '✓';
+      
+      if (kpiInfo.inverted) {
+        // For inverted KPIs like waste (lower is better)
+        if (kpiInfo.criticalHigh && value >= kpiInfo.criticalHigh) {
+          status = 'CRITICAL';
+          statusEmoji = '🔴';
+        } else if (kpiInfo.warningHigh && value >= kpiInfo.warningHigh) {
+          status = 'WARNING';
+          statusEmoji = '⚠️';
+        }
+      } else {
+        // For normal KPIs (higher is better)
+        if (kpiInfo.criticalLow && value <= kpiInfo.criticalLow) {
+          status = 'CRITICAL';
+          statusEmoji = '🔴';
+        } else if (kpiInfo.warningLow && value <= kpiInfo.warningLow) {
+          status = 'WARNING';
+          statusEmoji = '⚠️';
+        }
+      }
+      
+      const formattedValue = kpiInfo.unit === '$' ? '$' + Math.floor(value).toLocaleString() : Math.floor(value) + kpiInfo.unit;
+      return `${statusEmoji} ${kpiInfo.name} (ID: "${key}"): ${formattedValue} [${status}]`;
+    }).join('\n');
+
+    // Build NPC context with relationships, emotional states, and decision memory
+    const npcContext = this.npcs.map(npc => {
+      const relationship = this.npcRelationships[npc.id] || 50;
+      const emotionalState = this.npcEmotionalStates[npc.id] || 'neutral';
+      const relationshipDesc = relationship >= 70 ? 'Trusting' : relationship >= 40 ? 'Professional' : 'Strained';
+      
+      // Get recent decisions involving this NPC
+      const npcMemory = this.npcMemories[npc.id] || [];
+      const recentDecisions = npcMemory
+        .filter(m => m.type === 'decision')
+        .slice(-3) // Last 3 decisions
+        .map(m => `  Day ${m.day}: \"${m.scenario}\" - You chose: \"${m.decision.substring(0, 60)}${m.decision.length > 60 ? '...' : ''}\"`)
+        .join('\n');
+      
+      const memorySection = recentDecisions ? `
+  Recent Decisions Involving ${npc.name}:
+${recentDecisions}` : '';
+      
+      return `- ${npc.name} (${npc.role}): Relationship ${relationship}/100 (${relationshipDesc}), Currently ${emotionalState}
+  Personality: ${npc.personality}
+  Expertise: ${npc.expertise ? npc.expertise.join(', ') : 'General'}
+  Communication Style: ${npc.communicationStyle || 'Professional'}${memorySection}`;
+    }).join('\n\n');
+
+    const prompt = `You are an advanced Strategy Game simulator creating HIGHLY DETAILED, SPECIFIC scenarios.
+
+GAME CONTEXT:
 - Industry: ${this.selectedIndustry.name}
-- Role: ${this.selectedRole.name}
+- Your Role: ${this.selectedRole.name}
 - Day: ${this.currentDay} of ${this.selectedDifficulty.daysToComplete}
 - Daily Event: "${this.currentDailyEvent.name}" (${this.currentDailyEvent.context})
 - Daily Strategy: "${this.dailyStrategy ? this.dailyStrategy.name : 'Balanced'}" (${this.dailyStrategy ? this.dailyStrategy.description : ''})
-- Previous Decision Context: ${this.currentNarrativeContext || "None (First Scenario)"}
-- Story Arc: ${this.storyline ? this.storyline.slice(-3).map(s => s.summary).join(' -> ') : "Starting"}
-- Focus KPI: "${lowestKPI ? this.kpiDefinitions[lowestKPI.id].name : 'General Operations'}" is currently at ${lowestKPI ? lowestKPI.value : 'Stable'}%
+- Previous Decision Outcome: ${this.currentNarrativeContext || "None (First Scenario)"}
+- Story Arc: ${this.storyline ? this.storyline.slice(-3).map(s => s.summary).join(' → ') : "Starting"}
 
-CRITICAL INSTRUCTION: Generate a scenario that is LOGICALLY CONNECTED to the Previous Decision Context.
-If the context says "Staff is tired", the new problem should be about mistakes due to fatigue.
-If the context says "Kitchen is crowded", the new problem should be about safety or slow service.
+DETAILED KPI STATUS:
+${kpiStatus}
 
-The scenario MUST involve the NPC: ${relevantNPC.name} (${relevantNPC.role}, ${relevantNPC.personality}).
+NPC TEAM STATUS:
+${npcContext}
 
-Current KPIs:
-${Object.entries(this.kpis).map(([key, value]) => {
-  const kpiInfo = this.kpiDefinitions[key];
-  return `- ${kpiInfo.name} (ID: "${key}"): ${kpiInfo.unit === '$' ? '$' + Math.floor(value).toLocaleString() : Math.floor(value) + (kpiInfo.unit === 'number' ? '' : kpiInfo.unit)}`;
-}).join('\n')}
+LIVE KITCHEN STATUS:
+- Active Orders: ${this.liveSimulation.activeOrders.length}
+- Customer Queue: ${this.liveSimulation.customerQueue}
+- Recent Chaos: ${this.liveSimulation.recentChaos || "None"}
 
-IMPORTANT: When defining 'consequences', you MUST use the exact 'ID' listed above.
+CRITICAL INSTRUCTIONS FOR SCENARIO CREATION:
+
+1. **BE EXTREMELY SPECIFIC**: Instead of "inventory is low", say "We only have 237 burger patties left, which won't last through lunch rush. We normally use 400 during peak hours."
+
+2. **USE EXACT NUMBERS**: Reference actual KPI values. If chicken stock is at 180 units and critical is 100, mention "180 chicken breasts remaining, dangerously close to our 100-unit emergency threshold."
+
+3. **CONNECT TO PREVIOUS CONTEXT**: The scenario MUST be a logical consequence of the previous decision. If context says "Staff is exhausted from overtime", create a scenario about mistakes, accidents, or complaints due to fatigue.
+
+4. **NPC PERSONALITY INTEGRATION**: The NPC should speak and act according to their personality and current emotional state. Reference their expertise and concerns.
+
+5. **RELATIONSHIP AWARENESS**: NPCs with high relationship (70+) will be supportive and give benefit of doubt. NPCs with low relationship (40-) will be critical and question decisions.
+
+6. **STAY WITHIN EXPERTISE**: The NPC should ONLY discuss topics within their expertise areas. Do NOT have them comment on unrelated issues:
+   - Customers/Clients: Can discuss customer satisfaction, service quality, reputation
+   - Chefs: Food quality, inventory, operations, waste
+   - Supervisors: Staff morale, compliance, scheduling, customer service
+   - Suppliers: Supply chain, pricing, delivery, product quality
+   - Technicians: Equipment, maintenance, safety
+   
+7. **INCLUDE CLARIFICATION OPPORTUNITY**: After presenting the scenario, the NPC should offer to answer questions or provide more details if needed. This allows the player to seek clarification.
+
+The scenario MUST involve: ${relevantNPC.name} (${relevantNPC.role})
+Their expertise: ${relevantNPC.expertise ? relevantNPC.expertise.join(', ') : 'General'}
+Current relationship with you: ${this.npcRelationships[relevantNPC.id]}/100
+Current emotional state: ${this.npcEmotionalStates[relevantNPC.id]}
+
+IMPORTANT: When defining 'consequences', you MUST use the exact KPI 'ID' from the status list above.
 
 Task: Create a management scenario with a RANDOM question type.
 Randomly select ONE type:
-1. "multiple-choice" (Standard decision)
-2. "true-false" (Quick judgment)
-3. "matching" (Match items/concepts)
-4. "priority-ranking" (Prioritize tasks)
-5. "open-ended" (Management strategy)
+1. "multiple-choice" (Standard decision with 3-4 options)
+2. "true-false" (Quick judgment call)
+3. "priority-ranking" (Rank 4-5 tasks by urgency)
+4. "open-ended" (Explain your management strategy)
 
 CRITICAL RULES:
-- Output ONLY valid JSON.
-- No markdown, no control characters.
-- Use single-line strings.
+- Output ONLY valid JSON
+- No markdown, no code blocks, no explanations
+- Use single-line strings (no newlines in string values)
+- Be SPECIFIC with numbers, names, and details
+- ESCAPE any internal quotes in descriptions (e.g., "She said \\"Hello\\"")
+
+JSON Structure:
 
 JSON Structure:
 {
-  "title": "Scenario Title",
-  "description": "Situation description including involved characters.",
-  "involvedNPCs": ["${this.npcs[0]?.id || ''}"],
+  "title": "Specific Scenario Title (e.g., 'Burger Patty Shortage: 237 Units Remaining')",
+  "description": "Detailed situation with SPECIFIC numbers, names, and context. Include what the NPC is saying/reporting. Mention they're available for questions if you need clarification.",
+  "involvedNPCs": ["${relevantNPC.id}"],
   "urgency": "low|medium|high",
-  "questionType": "multiple-choice|true-false|matching|priority-ranking|open-ended",
+  "questionType": "multiple-choice|true-false|priority-ranking|open-ended",
+  "npcCanQuestionDecision": true,
   "data": {
-    // Structure depends on questionType:
-    
     // IF multiple-choice:
     "options": [
       { 
-        "text": "Option A", 
-        "consequences": {"kpi_key": 10},
+        "text": "Specific action with details (e.g., 'Order 1,000 burger patties from Rodriguez for rush delivery ($450 premium)')", 
+        "consequences": {"burgerPatties": 1000, "budget": -450, "relationship_supplier": 5},
         "npcReaction": {
-           "npcName": "Name of NPC reacting",
-           "mood": "happy|angry|concerned|neutral",
-           "dialogue": "Short, direct speech reacting to this specific decision."
+           "npcName": "${relevantNPC.name}",
+           "mood": "happy|concerned|frustrated|neutral",
+           "dialogue": "Character-specific response in their communication style, reacting to THIS specific choice",
+           "relationshipChange": -5 to +10
         },
-        "futureContext": "Short phrase describing the new state/problem caused by this choice (e.g. 'Staff is happy but equipment is breaking')"
+        "futureContext": "Specific outcome state (e.g., 'Inventory restocked but budget tight, Rodriguez expects future orders')",
+        "mayTriggerClarification": true
       }
     ]
+    // IF true-false:
+    // "statement": "Statement to evaluate",
+    // "correct": true,
+    // "explanation": "Why it is true/false",
+    // "consequences": { "success": {...}, "failure": {...} }
 
-    // (Other Types follow same pattern, ensuring 'npcReaction' and 'futureContext' are included in options/outcomes)
+    // IF open-ended:
+    // "question": "Strategic question to ask",
+    // "gradingRubric": ["Reasoning", "Impact awareness", "Tone"],
+    // "consequences": { "good": {...}, "average": {...}, "poor": {...} }
+
+    // IF priority-ranking:
+    // "items": ["Task A", "Task B", "Task C"],
+    // "correctOrder": [0, 2, 1], // Indices of items in correct order
+    // "consequences": { "success": {...}, "failure": {...} }
+
   }
-}
-`;
+}`;
+
 
     try {
       const responseStream = await this.askLLM([{ role: 'user', content: prompt }]);
@@ -1785,10 +2483,26 @@ JSON Structure:
     const reaction = option.npcReaction || {npcName: "System", mood: "neutral", dialogue: "Decision recorded."};
     const future = option.futureContext || "";
 
-    // 1. Update State
+    // 1. Record Decision in Detailed History
+    const decisionRecord = {
+      day: this.currentDay,
+      scenarioTitle: this.currentScenario.title,
+      decisionText: option.text,
+      consequences: consequences,
+      npcReaction: reaction,
+      futureContext: future,
+      timestamp: Date.now(),
+      involvedNPCs: this.currentScenario.involvedNPCs || []
+    };
+    this.detailedDecisionHistory.push(decisionRecord);
+    
+    // Update Decision History Display
+    this.updateDecisionHistory(option.text.substring(0, 40) + (option.text.length > 40 ? '...' : ''));
+    
+    // 2. Update State
     this.currentNarrativeContext = future; // Store logic context for next turn
 
-    // 2. Disable UI
+    // 3. Disable UI
     $$('.option-card').forEach(card => {
       card.style.pointerEvents = 'none';
       card.style.opacity = '0.5';
@@ -1800,7 +2514,7 @@ JSON Structure:
       selectedCard.style.backgroundColor = 'rgba(13, 110, 253, 0.2)';
     }
 
-    // 3. Apply Consequences
+    // 4. Apply Consequences
     const multiplier = this.selectedDifficulty.consequenceSeverity;
     Object.entries(consequences).forEach(([key, value]) => {
       if (this.kpis.hasOwnProperty(key)) {
@@ -1814,7 +2528,21 @@ JSON Structure:
     this.updateKPIsDisplay();
     this.addToActivityLog(`Decision: ${option.text.substring(0,30)}...`);
 
-    // 4. Trigger NPC Reaction Scene (The "Show Don't Tell" Phase)
+    // 5. Update NPC Memory - NPCs remember decisions that involved them
+    if (this.currentScenario.involvedNPCs) {
+      this.currentScenario.involvedNPCs.forEach(npcId => {
+        if (!this.npcMemories[npcId]) this.npcMemories[npcId] = [];
+        this.npcMemories[npcId].push({
+          type: 'decision',
+          scenario: this.currentScenario.title,
+          decision: option.text,
+          reaction: reaction.npcName === this.npcs.find(n => n.id === npcId)?.name ? reaction.dialogue : null,
+          day: this.currentDay
+        });
+      });
+    }
+
+    // 6. Trigger NPC Reaction Scene (The "Show Don't Tell" Phase)
     setTimeout(() => {
       this.renderConsequenceScene(reaction, consequences);
     }, 600);
@@ -2106,12 +2834,19 @@ Output JSON:
     // Apply impacts
     if (ev.kpiImpact) {
        Object.entries(ev.kpiImpact).forEach(([k, v]) => {
-         if (this.kpis[k] !== undefined) {
-           this.kpis[k] += v;
-           if (k !== 'budget' && k !== 'sales') this.kpis[k] = Math.min(100, Math.max(0, this.kpis[k]));
+       if (this.kpis[k] !== undefined) {
+         let change = v;
+         // Diminishing returns: Harder to gain as you get higher
+         if (change > 0 && k !== 'budget' && k !== 'sales') {
+            const headroom = 100 - this.kpis[k];
+            const factor = Math.max(0.2, headroom / 60); 
+            change = change * factor;
          }
-       });
-       this.updateKPIsDisplay();
+         this.kpis[k] += change;
+         if (k !== 'budget' && k !== 'sales') this.kpis[k] = Math.min(100, Math.max(0, this.kpis[k]));
+       }
+     });
+     this.updateKPIsDisplay();
     }
 
     const gradeColor = ev.score >= 80 ? 'success' : ev.score >= 60 ? 'warning' : 'danger';
@@ -2163,22 +2898,36 @@ Output JSON:
   }
 
   updateKPIsDisplay() {
-    Object.entries(this.kpis).forEach(([key, value]) => {
-      const kpiInfo = this.kpiDefinitions[key];
-      const element = $(`#kpi-${key}`);
-      if (element) {
-        const unit = kpiInfo.unit === 'number' ? '' : kpiInfo.unit;
-        const displayValue = kpiInfo.unit === '$' ? '$' + Math.floor(value).toLocaleString() : Math.floor(value) + unit;
-        element.textContent = displayValue;
-        
-        // Animate change
+  Object.entries(this.kpis).forEach(([key, value]) => {
+    const kpiInfo = this.kpiDefinitions[key];
+    const element = $(`#kpi-${key}`);
+    const prev = this.prevKpis[key] !== undefined ? this.prevKpis[key] : value;
+
+    if (element) {
+      const unit = kpiInfo.unit === 'number' ? '' : kpiInfo.unit;
+      const displayValue = kpiInfo.unit === '$' ? '$' + Math.floor(value).toLocaleString() : Math.floor(value) + unit;
+      
+      // Trend Arrow
+      let arrow = '';
+      if (value > prev) arrow = ' <span class="text-success small">↑</span>';
+      else if (value < prev) arrow = ' <span class="text-danger small">↓</span>';
+
+      element.innerHTML = displayValue + arrow;
+      
+      // Animate change
+      if (value !== prev) {
         element.style.transform = 'scale(1.2)';
+        element.classList.add(value > prev ? 'text-success' : 'text-danger');
+        
         setTimeout(() => {
           element.style.transform = 'scale(1)';
+          element.classList.remove('text-success', 'text-danger'); // Revert to original color logic which is handled by renderGameScreen usually, but here we might overrule it momentarily
         }, 300);
       }
-    });
-  }
+    }
+    this.prevKpis[key] = value;
+  });
+}
 
   addToActivityLog(message) {
     const log = $('#activity-log');
@@ -2688,7 +3437,9 @@ Output JSON:
   }
 
   async handleOpenAnswer(answer, data) {
-    const prompt = `Evaluate answer. Q: ${data.question} Rubric: ${data.gradingRubric.join(', ')} Answer: "${answer}" Rate: excellent/good/poor. Feedback: 1 sentence. JSON: {"rating":"good","feedback":"..."}`;
+    const rubric = data.gradingRubric ? data.gradingRubric.join(', ') : 'General Management Principles';
+    const question = data.question || 'Strategy Decision';
+    const prompt = `Evaluate answer. Q: ${question} Rubric: ${rubric} Answer: "${answer}" Rate: excellent/good/poor. Feedback: 1 sentence. JSON: {"rating":"good","feedback":"..."}`;
 
     try {
         // Show loading
@@ -2727,22 +3478,52 @@ Output JSON:
   processOutcome(result) {
     // Determine visuals
     const multiplier = this.selectedDifficulty.consequenceSeverity;
-    // Apply changes
+    
+    // Store detailed decision for history
+    this.detailedDecisionHistory.push({
+      day: this.currentDay,
+      decision: result.text,
+      consequences: {...result.consequences},
+      context: result.futureContext,
+      timestamp: Date.now()
+    });
+    
+    // Apply KPI changes
     Object.entries(result.consequences).forEach(([key, value]) => {
       if (typeof value === 'number' && (this.kpis.hasOwnProperty(key) || this.kpiDefinitions[key])) {
-         const kpiKey = this.kpiDefinitions[key] ? key : Object.keys(this.kpis)[0];
-         if(this.kpis[kpiKey] !== undefined) {
-             const adjusted = Math.floor(value * multiplier);
-             this.kpis[kpiKey] = Math.max(0, this.kpis[kpiKey] + adjusted);
-             
-             // Cap percentage KPIs at 100 dynamically
-             const def = this.kpiDefinitions[kpiKey];
-             if (def && def.unit === '%') {
-                this.kpis[kpiKey] = Math.min(100, this.kpis[kpiKey]);
-             }
-         }
+        
+        let finalValue = value;
+        // Diminishing returns for positive gains
+        if (finalValue > 0 && key !== 'budget' && key !== 'sales') {
+            const current = this.kpis[key] || 50;
+            const factor = Math.max(0.2, (110 - current) / 60);
+            finalValue = finalValue * factor;
+        }
+
+        this.kpis[key] = (this.kpis[key] || 0) + finalValue;
+        
+        // Cap at 0-100 for non-resource KPIs
+        if (key !== 'budget' && key !== 'sales') {
+          this.kpis[key] = Math.min(100, Math.max(0, this.kpis[key]));
+        }
       }
     });
+
+    // Handle NPC relationship changes
+    if (result.npcReaction) {
+      const npcId = this.npcs.find(n => n.name === result.npcReaction.npcName)?.id;
+      if (npcId && result.npcReaction.relationshipChange) {
+        const oldRelationship = this.npcRelationships[npcId] || 50;
+        this.npcRelationships[npcId] = Math.max(0, Math.min(100, oldRelationship + result.npcReaction.relationshipChange));
+        
+        // Update emotional state based on mood
+        if (result.npcReaction.mood) {
+          this.npcEmotionalStates[npcId] = result.npcReaction.mood;
+        }
+        
+        console.log(`${result.npcReaction.npcName} relationship: ${oldRelationship} → ${this.npcRelationships[npcId]}`);
+      }
+    }
 
     this.updateKPIsDisplay();
     this.addToActivityLog(`Task: ${result.text}`);
@@ -2758,10 +3539,23 @@ Output JSON:
         this.currentNarrativeContext = result.futureContext;
     }
 
-    this.showOutcomeV2(result.outcome || result.futureContext || "Outcome Applied", result.consequences);
+    // Check if NPC wants to question this decision
+    if (result.mayTriggerClarification && Math.random() < 0.3) {
+      // 30% chance NPC will ask for clarification
+      const npcId = this.npcs.find(n => n.name === result.npcReaction?.npcName)?.id;
+      if (npcId) {
+        this.pendingClarifications.push({
+          npcId,
+          decision: result.text,
+          context: result.futureContext
+        });
+      }
+    }
+
+    this.showOutcomeV2(result.outcome || result.futureContext || "Outcome Applied", result.consequences, result.npcReaction);
   }
 
-  showOutcomeV2(outcomeText, consequences) {
+  showOutcomeV2(outcomeText, consequences, npcReaction) {
     const scenarioContainer = $('#scenario-container');
     
     const consequencesHTML = Object.entries(consequences)
@@ -2769,8 +3563,6 @@ Output JSON:
       .map(([key, value]) => {
         // Safe KPI lookup
         const kpiDef = this.kpiDefinitions[key]; 
-        // Fallback to purely visual if not found, or skip?
-        // Let's try to map to customKPIs if available
         const kpiInfo = kpiDef || { name: key, icon: 'bi-activity', unit: '' };
         
         const color = value > 0 ? 'success' : 'danger';
@@ -2784,11 +3576,57 @@ Output JSON:
           </div>`;
       }).join('');
 
+    // NPC Reaction section
+    let npcReactionHTML = '';
+    if (npcReaction && npcReaction.dialogue) {
+      const npc = this.npcs.find(n => n.name === npcReaction.npcName);
+      const moodColors = {
+        happy: 'success',
+        neutral: 'secondary',
+        concerned: 'warning',
+        frustrated: 'danger',
+        angry: 'danger'
+      };
+      const moodColor = moodColors[npcReaction.mood] || 'secondary';
+      const relationshipChange = npcReaction.relationshipChange || 0;
+      const relationshipText = relationshipChange > 0 ? 
+        `<span class="text-success">+${relationshipChange} relationship</span>` : 
+        relationshipChange < 0 ? 
+        `<span class="text-danger">${relationshipChange} relationship</span>` : '';
+
+      npcReactionHTML = `
+        <div class="alert alert-${moodColor} border-${moodColor} mb-4">
+          <div class="d-flex align-items-start">
+            <div class="fs-1 me-3">${npc?.avatar || '👤'}</div>
+            <div class="flex-grow-1">
+              <h6 class="mb-1">
+                <strong>${npcReaction.npcName}</strong> 
+                <span class="badge bg-${moodColor} ms-2">${npcReaction.mood}</span>
+                ${relationshipText ? `<span class="ms-2 small">${relationshipText}</span>` : ''}
+              </h6>
+              <p class="mb-0">"${npcReaction.dialogue}"</p>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    // Check for pending clarifications
+    const hasPendingClarification = this.pendingClarifications.length > 0;
+    const clarificationButtonHTML = hasPendingClarification ? `
+      <button id="clarification-btn" class="btn btn-warning btn-lg mb-2">
+        <i class="bi bi-question-circle me-2"></i>
+        ${this.npcs.find(n => n.id === this.pendingClarifications[0].npcId)?.name} wants to discuss this decision
+      </button>
+    ` : '';
+
     scenarioContainer.innerHTML = `
       <div class="text-center mb-4">
         <i class="bi bi-check-circle-fill text-success display-1 mb-3"></i>
         <h4 class="text-success mb-3">Decision Processed</h4>
       </div>
+
+      ${npcReactionHTML}
 
       <div class="alert alert-info mb-4">
         <h5 class="mb-2"><i class="bi bi-info-circle-fill me-2"></i>Result:</h5>
@@ -2800,12 +3638,20 @@ Output JSON:
         <div class="row g-2 small">${consequencesHTML}</div>
       </div>
 
-      <div class="d-grid">
+      <div class="d-grid gap-2">
+        ${clarificationButtonHTML}
         <button id="next-day-btn" class="btn btn-primary btn-lg">
           Next Day <i class="bi bi-arrow-right ms-2"></i>
         </button>
       </div>
     `;
+
+    if (hasPendingClarification) {
+      $('#clarification-btn').onclick = () => {
+        this.sounds.playClick();
+        this.handleNPCClarification();
+      };
+    }
 
     $('#next-day-btn').onclick = () => {
       this.sounds.playClick();
@@ -2816,11 +3662,281 @@ Output JSON:
     setTimeout(() => this.triggerRandomNPCInteraction(), 1500);
   }
 
-  async generateDynamicNPCs(industry) {
-    const prompt = `Generate 5 unique NPCs for a "${industry.name}" workplace.
-    Roles: Manager, Senior, Junior, Client, Rival.
+  async handleNPCClarification() {
+    if (this.pendingClarifications.length === 0) return;
     
-    CRITICAL: Output ONLY a valid JSON array, no explanations or markdown.
+    const clarification = this.pendingClarifications.shift(); // Get and remove first clarification
+    const npc = this.npcs.find(n => n.id === clarification.npcId);
+    if (!npc) return;
+
+    const relationship = this.npcRelationships[npc.id] || 50;
+    const emotionalState = this.npcEmotionalStates[npc.id] || 'neutral';
+    
+    // Show loading state
+    const scenarioContainer = $('#scenario-container');
+    scenarioContainer.innerHTML = `
+      <div class="text-center p-5">
+        <div class="spinner-border text-warning mb-3" style="width: 3rem; height: 3rem;"></div>
+        <h5>${npc.name} is formulating their question...</h5>
+      </div>
+    `;
+
+    // Generate NPC's question using LLM
+    const prompt = `You are ${npc.name}, a ${npc.role} with this personality: ${npc.personality}
+
+Your communication style: ${npc.communicationStyle || 'Professional'}
+Your current emotional state: ${emotionalState}
+Your relationship with the manager: ${relationship}/100 (${relationship >= 70 ? 'Trusting' : relationship >= 40 ? 'Professional' : 'Strained'})
+Your expertise: ${npc.expertise ? npc.expertise.join(', ') : 'General management'}
+
+The manager just made this decision: "${clarification.decision}"
+The outcome was: "${clarification.context}"
+
+Based on your personality and expertise, you want to question or seek clarification about this decision.
+
+Generate a response with:
+1. Your specific question or concern about the decision
+2. What additional information you need
+3. Optionally suggest an alternative approach
+
+Be in character. If relationship is high, be supportive but curious. If low, be more critical.
+
+Output ONLY valid JSON:
+{
+  "question": "Your specific question about the decision",
+  "concern": "What worries you or what you don't understand",
+  "suggestedAlternative": "Optional: What you think might work better (can be null)",
+  "tone": "supportive|curious|concerned|critical"
+}`;
+
+    try {
+      const responseStream = await this.askLLM([{ role: 'user', content: prompt }]);
+      let fullText = "";
+      for await (const chunk of responseStream) {
+        if (chunk.startsWith(fullText) && fullText.length > 0) {
+          fullText = chunk;
+        } else {
+          fullText += chunk;
+        }
+      }
+
+      const npcQuestion = parseRelaxedJSON(fullText);
+      
+      // Display the clarification interface
+      this.renderClarificationInterface(npc, npcQuestion, clarification);
+
+    } catch (e) {
+      console.error("Clarification generation failed:", e);
+      // Skip to next day if failed
+      this.advanceDay();
+    }
+  }
+
+  renderClarificationInterface(npc, npcQuestion, clarification) {
+    const scenarioContainer = $('#scenario-container');
+    
+    const toneColors = {
+      supportive: 'success',
+      curious: 'info',
+      concerned: 'warning',
+      critical: 'danger'
+    };
+    const toneColor = toneColors[npcQuestion.tone] || 'warning';
+
+    scenarioContainer.innerHTML = `
+      <div class="border-start border-4 border-${toneColor} ps-4 mb-4">
+        <h6 class="text-${toneColor} text-uppercase letter-spacing-2">
+          <i class="bi bi-question-circle-fill me-2"></i>
+          Clarification Request
+        </h6>
+        <div class="d-flex align-items-start mb-3">
+          <div class="fs-1 me-3">${npc.avatar}</div>
+          <div class="flex-grow-1">
+            <h5 class="mb-1">${npc.name} <span class="badge bg-${toneColor}">${npcQuestion.tone}</span></h5>
+            <small class="text-white-50">${npc.role} • Relationship: ${this.npcRelationships[npc.id]}/100</small>
+          </div>
+        </div>
+      </div>
+
+      <div class="alert alert-${toneColor} border-${toneColor} mb-4">
+        <h6 class="mb-2"><i class="bi bi-chat-quote me-2"></i>Their Question:</h6>
+        <p class="mb-3">"${npcQuestion.question}"</p>
+        
+        <h6 class="mb-2"><i class="bi bi-exclamation-triangle me-2"></i>Their Concern:</h6>
+        <p class="mb-0">${npcQuestion.concern}</p>
+        
+        ${npcQuestion.suggestedAlternative ? `
+          <hr class="my-3">
+          <h6 class="mb-2"><i class="bi bi-lightbulb me-2"></i>Their Suggestion:</h6>
+          <p class="mb-0">${npcQuestion.suggestedAlternative}</p>
+        ` : ''}
+      </div>
+
+      <div class="alert alert-dark mb-4">
+        <h6 class="mb-2">Your Decision Was:</h6>
+        <p class="mb-0">"${clarification.decision}"</p>
+      </div>
+
+      <div class="mb-4">
+        <label class="form-label text-white">
+          <i class="bi bi-reply me-2"></i>
+          <strong>Your Response / Explanation:</strong>
+        </label>
+        <textarea 
+          id="clarification-response" 
+          class="form-control bg-dark text-white border-secondary" 
+          rows="4" 
+          placeholder="Explain your reasoning, address their concerns, or acknowledge their suggestion..."
+        ></textarea>
+        <small class="text-white-50 mt-1 d-block">
+          Your response will affect your relationship with ${npc.name}
+        </small>
+      </div>
+
+      <div class="d-grid gap-2">
+        <button id="submit-clarification-btn" class="btn btn-${toneColor} btn-lg">
+          <i class="bi bi-send me-2"></i>
+          Respond to ${npc.name}
+        </button>
+        <button id="skip-clarification-btn" class="btn btn-outline-secondary">
+          Skip (May damage relationship)
+        </button>
+      </div>
+    `;
+
+    $('#submit-clarification-btn').onclick = () => {
+      const response = $('#clarification-response').value.trim();
+      if (!response) {
+        showAlert('warning', 'Please provide a response');
+        return;
+      }
+      this.sounds.playClick();
+      this.processClarificationResponse(npc, npcQuestion, response);
+    };
+
+    $('#skip-clarification-btn').onclick = () => {
+      this.sounds.playClick();
+      // Damage relationship for skipping
+      this.npcRelationships[npc.id] = Math.max(0, this.npcRelationships[npc.id] - 5);
+      this.npcEmotionalStates[npc.id] = 'frustrated';
+      showAlert('warning', `${npc.name} seems disappointed you didn't respond (-5 relationship)`);
+      this.advanceDay();
+    };
+  }
+
+  async processClarificationResponse(npc, npcQuestion, playerResponse) {
+    const scenarioContainer = $('#scenario-container');
+    
+    scenarioContainer.innerHTML = `
+      <div class="text-center p-5">
+        <div class="spinner-border text-info mb-3" style="width: 3rem; height: 3rem;"></div>
+        <h5>${npc.name} is considering your response...</h5>
+      </div>
+    `;
+
+    const prompt = `You are ${npc.name}, a ${npc.role}.
+Your personality: ${npc.personality}
+Your relationship with the manager: ${this.npcRelationships[npc.id]}/100
+
+You asked: "${npcQuestion.question}"
+Your concern was: "${npcQuestion.concern}"
+
+The manager responded: "${playerResponse}"
+
+Evaluate their response:
+1. Does it address your concern adequately?
+2. Do you feel heard and respected?
+3. How does this affect your relationship?
+
+Output ONLY valid JSON:
+{
+  "satisfied": true/false,
+  "reaction": "Your emotional reaction to their response (1-2 sentences)",
+  "relationshipChange": -10 to +15 (number),
+  "newEmotionalState": "happy|neutral|concerned|frustrated"
+}`;
+
+    try {
+      const responseStream = await this.askLLM([{ role: 'user', content: prompt }]);
+      let fullText = "";
+      for await (const chunk of responseStream) {
+        if (chunk.startsWith(fullText) && fullText.length > 0) {
+          fullText = chunk;
+        } else {
+          fullText += chunk;
+        }
+      }
+
+      const evaluation = parseRelaxedJSON(fullText);
+      
+      // Update relationship and emotional state
+      const oldRelationship = this.npcRelationships[npc.id];
+      this.npcRelationships[npc.id] = Math.max(0, Math.min(100, oldRelationship + evaluation.relationshipChange));
+      this.npcEmotionalStates[npc.id] = evaluation.newEmotionalState;
+
+      // Show result
+      const satisfiedColor = evaluation.satisfied ? 'success' : 'warning';
+      const relationshipChangeText = evaluation.relationshipChange > 0 ? 
+        `<span class="text-success">+${evaluation.relationshipChange}</span>` : 
+        `<span class="text-danger">${evaluation.relationshipChange}</span>`;
+
+      scenarioContainer.innerHTML = `
+        <div class="text-center mb-4">
+          <div class="fs-1 mb-3">${npc.avatar}</div>
+          <h4 class="text-${satisfiedColor}">${npc.name}'s Response</h4>
+        </div>
+
+        <div class="alert alert-${satisfiedColor} mb-4">
+          <p class="mb-0">"${evaluation.reaction}"</p>
+        </div>
+
+        <div class="alert alert-dark mb-4">
+          <div class="row text-center">
+            <div class="col-6">
+              <h6>Relationship Change</h6>
+              <div class="fs-4">${relationshipChangeText}</div>
+              <small class="text-white-50">${oldRelationship} → ${this.npcRelationships[npc.id]}</small>
+            </div>
+            <div class="col-6">
+              <h6>Emotional State</h6>
+              <div class="fs-4">
+                <span class="badge bg-secondary">${evaluation.newEmotionalState}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="d-grid">
+          <button id="continue-btn" class="btn btn-primary btn-lg">
+            Continue <i class="bi bi-arrow-right ms-2"></i>
+          </button>
+        </div>
+      `;
+
+      $('#continue-btn').onclick = () => {
+        this.sounds.playClick();
+        this.advanceDay();
+      };
+
+    } catch (e) {
+      console.error("Clarification evaluation failed:", e);
+      showAlert('danger', 'Failed to process response');
+      this.advanceDay();
+    }
+  }
+
+
+  async generateDynamicNPCs(industry) {
+    const prompt = `Generate 5 unique INTERNAL STAFF NPCs for a "${industry.name}" business.
+    Context: ${industry.description || "A busy workplace"}
+    
+    CRITICAL RULES:
+    1. EXCLUDE external roles like "Client", "Rival", "Competitor", "Customer", or "Supplier".
+    2. ALL NPCs must be employees or internal stakeholders (e.g., Chef, Sous Chef, Shift Lead, Manager, Janitor, Accountant, Technician).
+    3. Roles should be specific to the "${industry.name}" industry.
+    4. Create diverse personalities (e.g., "Perfectionist", "Lazy but Talented", "Stressed Workaholic", "Cheerful Helper").
+
+    Output ONLY a valid JSON array.
     Format: [{"id":"n1","name":"Name","role":"Role","personality":"Trait","avatar":"👤"}]`;
     
     try {
