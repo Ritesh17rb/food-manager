@@ -437,7 +437,16 @@ class ManagementGame {
       totalSalesToday: 0,
       recentChaos: null, 
       simulationInterval: null,
-      eventInterval: null
+      eventInterval: null,
+      tickCounter: 0 // Track ticks for Director
+    };
+
+    // AI Kitchen Director State
+    this.kitchenDirector = {
+        lastNarrative: null,
+        pendingEvents: [],
+        mood: "neutral",
+        contextBuffer: [] // Store short-term events for LLM context
     };
 
     this.prevKpis = {}; // Track history for trends
@@ -446,6 +455,103 @@ class ManagementGame {
     this.isCustomIndustry = false;
     this.customKPIs = null;
     this.kpiDefinitions = null;
+
+    // Starting Scenarios
+    this.selectedScenarioMode = null;
+    this.startingScenarios = [
+      {
+        id: 'standard',
+        name: 'Standard Day',
+        icon: 'bi-sun',
+        description: 'A typical day at the restaurant. Balanced traffic and operations.',
+        effectDescription: 'Normal difficulty.',
+        apply: (game) => {
+           // Standard settings
+           if (!game.liveSimulation.tables || game.liveSimulation.tables.length === 0) return;
+           game.liveSimulation.customerQueue = 0;
+           game.currentDailyEvent = { name: "Regular Tuesday", effect: "Standard operations", context: "Just another day." };
+        }
+      },
+      {
+        id: 'carnival',
+        name: 'Local Carnival',
+        icon: 'bi-balloon-fill',
+        description: 'The town carnival is in full swing nearby! Expect chaos.',
+        effectDescription: 'High queue & fast-paced.',
+        apply: (game) => {
+           // Only apply table logic if tables exist
+           if (game.liveSimulation.tables && game.liveSimulation.tables.length > 0) {
+             game.liveSimulation.customerQueue = 15;
+           }
+           game.currentDailyEvent = { name: "Carnival Chaos", effect: "Extreme traffic", context: "The carnival crowd is hungry!" };
+           game.scenarioMultiplier = 1.5; 
+        }
+      },
+      {
+        id: 'nba',
+        name: 'NBA Finals Game',
+        icon: 'bi-trophy-fill',
+        description: 'Huge sports event tonight. Waves of fans incoming.',
+        effectDescription: 'Bursts of high traffic.',
+        apply: (game) => {
+           // Only apply table logic if tables exist
+           if (game.liveSimulation.tables && game.liveSimulation.tables.length > 0) {
+              game.liveSimulation.customerQueue = 5;
+              if (game.liveSimulation.tables[0]) {
+                 game.liveSimulation.tables[0].occupied = true;
+                 game.liveSimulation.tables[0].customers = 4;
+                 game.generateOrder(game.liveSimulation.tables[0]);
+              }
+           }
+           game.currentDailyEvent = { name: "Game Night", effect: "Rush hours", context: "Fans are looking for a pre-game meal." };
+           game.scenarioMultiplier = 1.2;
+        }
+      },
+      {
+        id: 'ipl',
+        name: 'IPL Final Match',
+        icon: 'bi-tv',
+        description: 'Cricket fever is peaking! Everyone is glued to screens and ordering snacks.',
+        effectDescription: 'Constant stream of delivery & dine-in.',
+        apply: (game) => {
+           if (game.liveSimulation.tables && game.liveSimulation.tables.length > 0) {
+             game.liveSimulation.customerQueue = 10;
+           }
+           game.currentDailyEvent = { name: "IPL Final", effect: "Cricket Fever", context: "The match is down to the last over!" };
+           game.scenarioMultiplier = 1.3;
+        }
+      },
+      {
+        id: 'concert',
+        name: 'Music Concert',
+        icon: 'bi-music-note-beamed',
+        description: 'A massive rock concert just finished at the stadium nearby.',
+        effectDescription: 'Sudden massive queue spike.',
+        apply: (game) => {
+           if (game.liveSimulation.tables && game.liveSimulation.tables.length > 0) {
+             game.liveSimulation.customerQueue = 20; // Big rush
+           }
+           game.currentDailyEvent = { name: "Post-Concert Rush", effect: "Hungry Fans", context: "Thousands of fans are flooding the streets." };
+           game.scenarioMultiplier = 1.4;
+        }
+      },
+      {
+        id: 'diwali',
+        name: 'Diwali Night',
+        icon: 'bi-stars',
+        description: 'The Festival of Lights. Families are out celebrating with grand meals.',
+        effectDescription: 'Large groups & high expectations.',
+        apply: (game) => {
+           if (game.liveSimulation.tables && game.liveSimulation.tables.length > 0) {
+             game.liveSimulation.customerQueue = 8;
+           }
+           game.currentDailyEvent = { name: "Diwali Celebration", effect: "Festive Mood", context: "Families are gathering for the festival." };
+           game.scenarioMultiplier = 1.25;
+           // Boost morale initially due to festivity
+           game.kpis.staffMorale = Math.min(100, (game.kpis.staffMorale || 50) + 10);
+        }
+      }
+    ];
   }
 
   async init() {
@@ -869,13 +975,81 @@ Format:
         this.sounds.playClick();
         const roleId = card.dataset.role;
         this.selectedRole = this.selectedIndustry.roles.find(r => r.id === roleId);
-        this.renderDifficultySelection();
+        this.renderScenarioSelection();
       });
     });
 
     $('#back-btn').onclick = () => {
       this.sounds.playClick();
       this.renderIndustrySelection();
+    };
+  }
+
+  renderScenarioSelection() {
+    const scenariosHTML = this.startingScenarios.map(scen => `
+      <div class="col-md-4 mb-3">
+        <div class="card bg-dark border-secondary h-100 scenario-card" 
+             data-scenario="${scen.id}"
+             style="cursor: pointer; transition: all 0.3s;">
+          <div class="card-body p-4 text-center">
+            <i class="bi ${scen.icon} display-4 text-info mb-3"></i>
+            <h5 class="card-title text-white mb-2">${scen.name}</h5>
+            <p class="card-text text-white-50 small mb-3 text-wrap">${scen.description}</p>
+            <div class="badge bg-dark border border-info text-info p-2 text-wrap lh-sm">
+              ${scen.effectDescription}
+            </div>
+          </div>
+        </div>
+      </div>
+    `).join('');
+
+    this.container.innerHTML = `
+      <div class="min-vh-100 p-4 text-white" 
+           style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);">
+        <div class="container" style="max-width: 900px;">
+          <div class="text-center mb-5">
+            <h2 class="display-5 mb-3">
+              <i class="bi bi-calendar-event me-2"></i>
+              Choose Starting Scenario
+            </h2>
+            <p class="text-white-50">This determines the initial conditions of your restaurant.</p>
+          </div>
+
+          <div class="row justify-content-center">
+            ${scenariosHTML}
+          </div>
+
+          <div class="text-center mt-5">
+            <button id="back-btn" class="btn btn-outline-light">
+              <i class="bi bi-arrow-left me-2"></i>Back
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+
+    $$('.scenario-card').forEach(card => {
+        card.addEventListener('mouseenter', () => {
+        card.style.transform = 'translateY(-5px)';
+        card.style.borderColor = '#0dcaf0';
+        card.style.boxShadow = '0 5px 20px rgba(13, 202, 240, 0.3)';
+        });
+        card.addEventListener('mouseleave', () => {
+        card.style.transform = 'translateY(0)';
+        card.style.borderColor = '';
+        card.style.boxShadow = '';
+        });
+        card.addEventListener('click', () => {
+        this.sounds.playClick();
+        const sId = card.dataset.scenario;
+        this.selectedScenarioMode = this.startingScenarios.find(s => s.id === sId);
+        this.renderDifficultySelection();
+        });
+    });
+
+    $('#back-btn').onclick = () => {
+        this.sounds.playClick();
+        this.renderRoleSelection();
     };
   }
 
@@ -960,7 +1134,7 @@ Format:
 
     $('#back-btn').onclick = () => {
       this.sounds.playClick();
-      this.renderRoleSelection();
+      this.renderScenarioSelection();
     };
   }
 
@@ -1051,14 +1225,20 @@ Format:
   }
 
   async initializeStory() {
+  // Use scenario-specific context if available
+  const scenarioCtx = this.selectedScenarioMode ? 
+     `Starting Scenario: ${this.selectedScenarioMode.name} - ${this.selectedScenarioMode.description}.` : 
+     "Standard operations.";
+
   const prompt = `Create a short, engaging opening story plot for a game where the user plays as a ${this.selectedRole.name} in the ${this.selectedIndustry.name} industry.
+  ${scenarioCtx}
   Current Situation: Starting a new job/position.
   KPIs: ${Object.entries(this.selectedRole.startingKPIs).map(([k,v]) => `${k}:${v}`).join(', ')}.
   
   Output JSON format:
   {
-    "plot_summary": "One sentence summary of the current situation",
-    "opening_narrative": "A paragraph describing the scene and the immediate challenge."
+    "plot_summary": "One sentence summary reflecting the ${this.selectedScenarioMode ? this.selectedScenarioMode.name : 'situation'}",
+    "opening_narrative": "A paragraph describing the scene. It MUST mention the '${this.selectedScenarioMode ? this.selectedScenarioMode.name : 'situation'}' details (e.g. crowds, noise, event)."
   }`;
   
   try {
@@ -1187,6 +1367,16 @@ async startGame() {
     // Initialize Story Plot
     await this.initializeStory();
 
+    // Apply Scenario Effects BEFORE rendering briefing/game
+    if (this.selectedScenarioMode && this.selectedScenarioMode.apply) {
+        // Initialize simple liveSim structure if not yet ready, but it is reset in startNewDay... 
+        // Actually startNewDay calls initializeLiveSimulation which resets tables.
+        // We need to apply scenario AFTER initializeLiveSimulation OR modify variables that persist.
+        // Since startNewDay is called after Briefing, we should apply scenario effects THERE or set flags.
+        // But `this.currentDailyEvent` is used in Briefing. So we set that here.
+        this.selectedScenarioMode.apply(this);
+    }
+
     this.renderMorningBriefing();
   }
 
@@ -1314,6 +1504,15 @@ async startGame() {
   startNewDay() {
     this.renderGameScreen();
     this.initializeLiveSimulation(); // Start the live restaurant simulation
+    
+    // Re-apply scenario specific table/order states if this is Day 1
+    if (this.currentDay === 1 && this.selectedScenarioMode && this.selectedScenarioMode.apply) {
+        this.selectedScenarioMode.apply(this);
+        this.updateTablesDisplay();
+        this.updateOrdersDisplay();
+        this.updateCustomerCount();
+    }
+
     this.generateScenario();
   }
 
@@ -1380,83 +1579,8 @@ async startGame() {
           </div>
         </div>
 
-        <!-- Live Restaurant Activity (Collapsible) -->
-        <div class="container-fluid mb-3">
-          <div class="card bg-dark border-warning">
-            <div class="card-header bg-transparent border-warning" 
-                 style="cursor: pointer;" 
-                 data-bs-toggle="collapse" 
-                 data-bs-target="#live-activity-panel">
-              <div class="d-flex align-items-center justify-content-between">
-                <h6 class="mb-0">
-                  <i class="bi bi-broadcast text-warning me-2"></i>
-                  <span class="text-warning">LIVE</span> Restaurant Activity
-                  <span class="badge bg-warning text-dark ms-2" id="live-customer-count">0 customers</span>
-                </h6>
-                <i class="bi bi-chevron-down text-warning"></i>
-              </div>
-            </div>
-            <div class="collapse show" id="live-activity-panel">
-              <div class="card-body p-3">
-                <div class="row g-2">
-                  <!-- Tables Status -->
-                  <div class="col-md-4">
-                    <div class="card bg-secondary bg-opacity-25 border-0 h-100">
-                      <div class="card-body p-2">
-                        <div class="small text-white-50 mb-2">
-                          <i class="bi bi-table me-1"></i>Tables
-                        </div>
-                        <div class="d-flex flex-wrap gap-1" id="tables-status">
-                          <!-- Tables will be dynamically populated -->
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <!-- Current Orders -->
-                  <div class="col-md-4">
-                    <div class="card bg-secondary bg-opacity-25 border-0 h-100">
-                      <div class="card-body p-2">
-                        <div class="small text-white-50 mb-2">
-                          <i class="bi bi-receipt me-1"></i>Active Orders
-                        </div>
-                        <div id="active-orders" style="max-height: 120px; overflow-y: auto; font-size: 0.75rem;">
-                          <!-- Orders will be dynamically populated -->
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <!-- Decision History -->
-                  <div class="col-md-4">
-                    <div class="card bg-secondary bg-opacity-25 border-0 h-100">
-                      <div class="card-body p-2">
-                        <div class="small text-white-50 mb-2">
-                          <i class="bi bi-clock-history me-1"></i>Recent Decisions
-                        </div>
-                        <div id="decision-history" style="max-height: 120px; overflow-y: auto; font-size: 0.75rem;">
-                          <!-- Recent decisions will be dynamically populated -->
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- Live Feed -->
-                <div class="mt-2">
-                  <div class="small text-white-50 mb-1">
-                    <i class="bi bi-activity me-1"></i>Live Feed
-                  </div>
-                  <div id="live-feed" 
-                       class="bg-black bg-opacity-50 rounded p-2" 
-                       style="max-height: 100px; overflow-y: auto; font-size: 0.7rem; font-family: monospace;">
-                    <div class="text-success">System initialized...</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+        <!-- Live Restaurant Activity (Collapsible Removed) --> 
+        <!-- Logic moved to sidebar -->
 
         <!-- Main Content Area -->
         <div class="container-fluid">
@@ -1482,6 +1606,37 @@ async startGame() {
 
             <!-- Side Panel -->
             <div class="col-lg-4">
+              
+              <!-- NEW: Kitchen Activity Widget (Relocated) -->
+              <div class="card bg-dark border-warning mb-3">
+                <div class="card-header bg-transparent border-warning d-flex justify-content-between align-items-center">
+                   <h6 class="mb-0 text-warning"><i class="bi bi-broadcast me-2"></i>Kitchen Activity</h6>
+                   <span class="badge bg-warning text-dark" id="live-customer-count">0 cust</span>
+                </div>
+                <div class="card-body p-2">
+                   <!-- Tables Small Grid -->
+                   <div class="mb-2">
+                     <div class="small text-white-50 mb-1"><i class="bi bi-table me-1"></i>Tables</div>
+                     <div class="d-flex flex-wrap gap-1" id="tables-status"></div>
+                   </div>
+                   
+                   <!-- Active Orders -->
+                   <div class="mb-2">
+                     <div class="small text-white-50 mb-1"><i class="bi bi-receipt me-1"></i>Orders</div>
+                     <div id="active-orders" style="max-height: 100px; overflow-y: auto;"></div>
+                   </div>
+
+                   <!-- Live Feed -->
+                   <div>
+                     <div class="small text-white-50 mb-1"><i class="bi bi-activity me-1"></i>Log</div>
+                     <div id="live-feed" 
+                          class="bg-black bg-opacity-50 rounded p-2" 
+                          style="max-height: 80px; overflow-y: auto; font-size: 0.65rem; font-family: monospace; line-height: 1.2;">
+                     </div>
+                   </div>
+                </div>
+              </div>
+
               <!-- NPCs -->
               <div class="card bg-dark border-light mb-3">
                 <div class="card-header bg-transparent border-bottom border-secondary">
@@ -1496,12 +1651,12 @@ async startGame() {
                          data-npc="${npc.id}" 
                          style="cursor: pointer; transition: all 0.2s;"
                          title="${npc.personality}">
-                      <div class="fs-3 me-2">${npc.avatar}</div>
+                      <div class="fs-4 me-2">${npc.avatar}</div>
                       <div class="flex-grow-1">
                         <div class="fw-bold small">${npc.name}</div>
-                        <div class="text-white-50" style="font-size: 0.75rem;">${npc.role}</div>
+                        <div class="text-white-50" style="font-size: 0.7rem;">${npc.role}</div>
                       </div>
-                      <i class="bi bi-chat-dots text-primary"></i>
+                      <i class="bi bi-chat-dots text-primary small"></i>
                     </div>
                   `).join('')}
                 </div>
@@ -1512,12 +1667,12 @@ async startGame() {
                 <div class="card-header bg-transparent border-bottom border-secondary">
                   <h6 class="mb-0">
                     <i class="bi bi-clock-history me-2"></i>
-                    Activity Log
+                    Game Log
                   </h6>
                 </div>
-                <div class="card-body p-2" id="activity-log" style="max-height: 300px; overflow-y: auto;">
+                <div class="card-body p-2" id="activity-log" style="max-height: 200px; overflow-y: auto;">
                   <div class="small text-white-50 text-center p-3">
-                    Game started. Good luck!
+                    Game started.
                   </div>
                 </div>
               </div>
@@ -1559,8 +1714,8 @@ async startGame() {
     this.updateTablesDisplay();
     
     // Start simulation loops
-    this.liveSimulation.simulationInterval = setInterval(() => this.runSimulationTick(), 3000); // Every 3 seconds
-    this.liveSimulation.eventInterval = setInterval(() => this.generateLiveEvent(), 15000); // Every 15 seconds
+    this.liveSimulation.simulationInterval = setInterval(() => this.runSimulationTick(), 1000); // Faster tick (1s) for smoother feel, logic scales down
+    // Removed separate eventInterval, now integrated into Director logic
     
     this.addToLiveFeed('Restaurant opened for business!', 'success');
   }
@@ -1569,33 +1724,45 @@ async startGame() {
     if (this.liveSimulation.simulationInterval) {
       clearInterval(this.liveSimulation.simulationInterval);
     }
-    if (this.liveSimulation.eventInterval) {
-      clearInterval(this.liveSimulation.eventInterval);
-    }
   }
 
   runSimulationTick() {
-    // Customer arrival logic
-    const arrivalChance = 0.4; // 40% chance per tick
-    const efficiency = this.kpis.efficiency || 65;
-    const reputation = this.kpis.reputation || 60;
-    
-    // Higher efficiency and reputation = more customers
-    const adjustedChance = arrivalChance * (reputation / 60) * (efficiency / 65);
-    
-    if (Math.random() < adjustedChance) {
-      this.handleCustomerArrival();
+    this.liveSimulation.tickCounter++;
+
+    // Customer arrival logic (every 3 seconds approx)
+    if (this.liveSimulation.tickCounter % 3 === 0) {
+        this.handleCustomerArrivalLogic();
     }
-    
-    // Process existing orders
+
+    // Process existing orders (every second)
     this.processOrders();
     
-    // Check for customers leaving
+    // Check for departures
     this.checkCustomerDepartures();
     
     // Update displays
     this.updateTablesDisplay();
     this.updateOrdersDisplay();
+
+    // --- AI DIRECTOR TRIGGER (Every ~20 seconds) ---
+    if (this.liveSimulation.tickCounter % 20 === 0) {
+        this.runKitchenDirector();
+    }
+  }
+
+  handleCustomerArrivalLogic() {
+    const arrivalChance = 0.4; // 40% chance per tick
+    const efficiency = this.kpis.efficiency || 65;
+    const reputation = this.kpis.reputation || 60;
+    
+    // Higher efficiency and reputation = more customers
+    // Apply Scenario Multiplier if present
+    const scenarioMult = this.scenarioMultiplier || 1.0;
+    const adjustedChance = arrivalChance * (reputation / 60) * (efficiency / 65) * scenarioMult;
+    
+    if (Math.random() < adjustedChance) {
+      this.handleCustomerArrival();
+    }
   }
 
   handleCustomerArrival() {
@@ -1881,11 +2048,15 @@ Output ONLY the event text, no JSON, no quotes.`;
       ordersContainer.innerHTML = '<div class="text-white-50 text-center py-2">No active orders</div>';
     } else {
       ordersContainer.innerHTML = this.liveSimulation.activeOrders.map(order => {
-        const statusColors = {pending: 'warning', cooking: 'primary', served: 'success'};
+        // Updated Status Colors for better contrast
+        const statusColors = {pending: 'info', cooking: 'primary', served: 'success'}; // 'info' is Cyan, better than warning (yellow)
         const statusIcons = {pending: '⏳', cooking: '🔥', served: '✅'};
-        return `<div class="d-flex justify-content-between align-items-center mb-1 p-1 bg-secondary bg-opacity-25 rounded">
-          <span>${statusIcons[order.status]} Table ${order.tableId}</span>
-          <span class="badge bg-${statusColors[order.status]}">${order.status}</span>
+        // Use text-dark for info badge to ensure readability, or white if using dark theme
+        const textColor = order.status === 'pending' ? 'text-dark' : 'text-white';
+        
+        return `<div class="d-flex justify-content-between align-items-center mb-1 p-1 bg-secondary bg-opacity-25 rounded" style="font-size: 0.7rem;">
+          <span class="text-truncate" style="max-width: 120px;">${statusIcons[order.status]} Table ${order.tableId}</span>
+          <span class="badge bg-${statusColors[order.status]} ${textColor}">${order.status}</span>
         </div>`;
       }).join('');
     }
@@ -1917,29 +2088,135 @@ Output ONLY the event text, no JSON, no quotes.`;
     countBadge.textContent = `${currentCustomers} customer${currentCustomers !== 1 ? 's' : ''}`;
   }
 
+  async runKitchenDirector() {
+    // Gather Context
+    const activeStat = `${this.liveSimulation.activeOrders.length} active orders`;
+    const queueStat = `${this.liveSimulation.customerQueue} waiting`;
+    const kpiStat = `Eff:${this.kpis.efficiency}, Morale:${this.kpis.staffMorale}`;
+    const scenario = this.selectedScenarioMode ? this.selectedScenarioMode.name : "Standard";
+    const recentLogs = this.kitchenDirector.contextBuffer.join('; ');
+    this.kitchenDirector.contextBuffer = []; // Clear buffer after reading
+
+    const prompt = `You are the AI DIRECTOR of a chaotic restaurant kitchen simulation.
+    Scenario: ${scenario}.
+    Status: ${activeStat}, ${queueStat}, ${kpiStat}.
+    Recent Events: ${recentLogs || "Quiet"}.
+
+    Task: Generate a narrative update (1 sentence) and an optional kitchen event.
+    The narrative should be atmospheric (e.g., sound, smell, staff feeling).
+    
+    Event Types (choose wisely based on Status):
+    - "minor_accident" (e.g. dropped plate, burn) -> small delay
+    - "staff_bark" (NPC shouts something) -> neutral/flavor
+    - "equipment_glitch" -> stops a cooking order
+    - "customer_complaint" -> reduced rep
+    - "smooth_sailing" -> boost morale
+    - "rush_hour" -> increase arrival chance momentarily
+
+    Format JSON:
+    {
+       "narrative": "Atmospheric text...",
+       "event": {"type": "type_id", "target": "Chef/Unit", "desc": "What happened"},
+       "mood": "hectic|calm|tense|cheerful"
+    }`;
+
+    try {
+        const responseStream = await this.askLLM([{ role: 'user', content: prompt }]);
+        let fullText = "";
+        for await (const chunk of responseStream) {
+             if (chunk.startsWith(fullText)) fullText = chunk; else fullText += chunk;
+        }
+
+        const data = parseRelaxedJSON(fullText);
+        
+        // Apply Director Actions
+        if(data.narrative) {
+             this.addToLiveFeed(data.narrative, 'director');
+        }
+
+        if(data.event) {
+            this.handleDirectorEvent(data.event);
+        }
+
+    } catch(e) {
+        console.warn("Director offline:", e);
+    }
+  }
+
+  handleDirectorEvent(event) {
+      if(!event || !event.type) return;
+
+      switch(event.type) {
+          case 'minor_accident':
+              this.addToLiveFeed(`💥 ${event.desc}`, 'danger');
+              this.kpis.efficiency = Math.max(0, this.kpis.efficiency - 2);
+              break;
+          case 'staff_bark':
+              const speaker = this.npcs[Math.floor(Math.random()*this.npcs.length)];
+              this.addToLiveFeed(`🗣️ ${speaker.name}: "${event.desc}"`, 'info');
+              break;
+          case 'equipment_glitch':
+              this.addToLiveFeed(`⚠️ ${event.desc}`, 'warning');
+              // Pause random cooking order
+              const cooking = this.liveSimulation.activeOrders.find(o => o.status === 'cooking');
+              if(cooking) {
+                  cooking.progress = Math.max(0, cooking.progress - 20); // Setback
+              }
+              break;
+          case 'customer_complaint':
+              this.addToLiveFeed(`😠 ${event.desc}`, 'danger');
+              this.kpis.reputation -= 1;
+              break;
+          case 'smooth_sailing':
+              this.addToLiveFeed(`✨ ${event.desc}`, 'success');
+              this.kpis.staffMorale = Math.min(100, this.kpis.staffMorale + 1);
+              break;
+           case 'rush_hour':
+              this.addToLiveFeed(`🔥 ${event.desc}`, 'warning');
+              this.scenarioMultiplier = (this.scenarioMultiplier || 1) * 1.2;
+              setTimeout(() => this.scenarioMultiplier /= 1.2, 20000); // 20s boost
+              break;
+      }
+      this.updateKPIsDisplay();
+  }
+
   addToLiveFeed(message, type = 'secondary') {
+    // Buffer for AI Director
+    if (this.kitchenDirector && this.kitchenDirector.contextBuffer) {
+        if(this.kitchenDirector.contextBuffer.length < 5) { // Keep buffer small
+            this.kitchenDirector.contextBuffer.push(message);
+        }
+    }
+
     const feed = $('#live-feed');
     if (!feed) return;
     
-    const colors = {
-      success: 'text-success',
-      danger: 'text-danger',
-      warning: 'text-warning',
-      info: 'text-info',
-      primary: 'text-primary',
-      secondary: 'text-white-50'
+    const entry = document.createElement('div');
+
+    // Style mapping
+    const styles = {
+        'info': 'text-info',
+        'warning': 'text-warning',
+        'danger': 'text-danger',
+        'success': 'text-success',
+        'director': 'text-white fst-italic border-start border-3 border-primary ps-2 my-1' // Special style for AI
     };
     
-    const entry = document.createElement('div');
-    entry.className = colors[type] || colors.secondary;
-    const timestamp = new Date().toLocaleTimeString();
-    entry.textContent = `[${timestamp}] ${message}`;
+    const time = new Date().toLocaleTimeString([], { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit"});
     
+    if (type === 'director') {
+        entry.innerHTML = `<span class="opacity-50 small">[${time}]</span> ${message}`;
+        entry.className = styles['director'];
+    } else {
+        entry.innerHTML = `<span class="opacity-50 small">[${time}]</span> <span class="${styles[type] || 'text-white'}">${message}</span>`;
+        entry.className = 'mb-1 text-wrap'; // Ensure wrapping
+    }
+
     feed.insertBefore(entry, feed.firstChild);
     
-    // Keep only last 10 entries
-    while (feed.children.length > 10) {
-      feed.removeChild(feed.lastChild);
+    // Keep feed clean
+    if (feed.children.length > 20) {
+        feed.removeChild(feed.lastChild);
     }
   }
 
@@ -4030,7 +4307,14 @@ Task: valid JSON response only.
 
 Input: "${userMessage}"
 
-Format: {"reply": "...", "kpi_impact": {}, "thought_process": "..."}`;
+Format: {"reply": "...", "kpi_impact": {}, "thought_process": "..."}
+
+IMPORTANT SENTIMENT SCORING:
+- If the User is RUDE, DISMISSIVE, or HOSTILE, you MUST reduce stats.
+- RUDE/HOSTILE: {"staffMorale": -3} (or more severe).
+- DISMISSIVE: {"staffMorale": -1}.
+- POLITE/SUPPORTIVE: {"staffMorale": 1} (optional boost).
+- ALWAYS evaluate the tone. Do not ignore rudeness.`;
 
   try {
     // Build Message Chain: System -> [History] -> User Input
