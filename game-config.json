@@ -127,9 +127,17 @@
           "role": "Head Chef",
           "personality": "Perfectionist, passionate about food quality, can be hot-headed when standards slip",
           "avatar": "👨‍🍳",
-          "expertise": ["food quality", "kitchen operations", "inventory management"],
+          "expertise": [
+            "food quality",
+            "kitchen operations",
+            "inventory management"
+          ],
           "communicationStyle": "Direct and passionate, uses culinary terminology",
-          "concerns": ["food waste", "quality standards", "kitchen safety"],
+          "concerns": [
+            "food waste",
+            "quality standards",
+            "kitchen safety"
+          ],
           "baseRelationship": 50,
           "emotionalRange": {
             "happy": "Enthusiastic and collaborative",
@@ -144,9 +152,17 @@
           "role": "Shift Supervisor",
           "personality": "Organized, detail-oriented, sometimes stressed about rules and compliance",
           "avatar": "👩‍💼",
-          "expertise": ["staff scheduling", "compliance", "customer service"],
+          "expertise": [
+            "staff scheduling",
+            "compliance",
+            "customer service"
+          ],
           "communicationStyle": "Formal and procedural, references policies",
-          "concerns": ["staff morale", "policy compliance", "customer complaints"],
+          "concerns": [
+            "staff morale",
+            "policy compliance",
+            "customer complaints"
+          ],
           "baseRelationship": 60,
           "emotionalRange": {
             "happy": "Supportive and encouraging",
@@ -161,9 +177,17 @@
           "role": "Front Counter Lead",
           "personality": "Friendly, young, eager to learn but makes small mistakes under pressure",
           "avatar": "👨‍💻",
-          "expertise": ["customer interaction", "POS systems", "upselling"],
+          "expertise": [
+            "customer interaction",
+            "POS systems",
+            "upselling"
+          ],
           "communicationStyle": "Casual and friendly, asks questions",
-          "concerns": ["customer satisfaction", "learning opportunities", "work-life balance"],
+          "concerns": [
+            "customer satisfaction",
+            "learning opportunities",
+            "work-life balance"
+          ],
           "baseRelationship": 70,
           "emotionalRange": {
             "happy": "Energetic and helpful",
@@ -178,9 +202,17 @@
           "role": "Primary Food Supplier",
           "personality": "Business-minded, negotiable but strict on payments and delivery schedules",
           "avatar": "🚚",
-          "expertise": ["supply chain", "pricing", "product quality"],
+          "expertise": [
+            "supply chain",
+            "pricing",
+            "product quality"
+          ],
           "communicationStyle": "Transactional but personable, talks numbers",
-          "concerns": ["payment schedules", "order volumes", "delivery logistics"],
+          "concerns": [
+            "payment schedules",
+            "order volumes",
+            "delivery logistics"
+          ],
           "baseRelationship": 55,
           "emotionalRange": {
             "happy": "Generous with deals and flexible",
@@ -195,9 +227,17 @@
           "role": "Regular Customer & Community Voice",
           "personality": "Loyal but demanding, knows the menu better than some staff, influential in community",
           "avatar": "👵",
-          "expertise": ["customer perspective", "community sentiment", "quality expectations"],
+          "expertise": [
+            "customer perspective",
+            "community sentiment",
+            "quality expectations"
+          ],
           "communicationStyle": "Direct and opinionated, compares to past experiences",
-          "concerns": ["food quality", "service speed", "value for money"],
+          "concerns": [
+            "food quality",
+            "service speed",
+            "value for money"
+          ],
           "baseRelationship": 65,
           "emotionalRange": {
             "happy": "Complimentary and loyal",
@@ -212,9 +252,17 @@
           "role": "Equipment Maintenance Technician",
           "personality": "Practical, experienced, warns about equipment issues before they become critical",
           "avatar": "🔧",
-          "expertise": ["equipment maintenance", "safety compliance", "cost-saving repairs"],
+          "expertise": [
+            "equipment maintenance",
+            "safety compliance",
+            "cost-saving repairs"
+          ],
           "communicationStyle": "Technical but clear, uses analogies",
-          "concerns": ["equipment lifespan", "safety hazards", "preventive maintenance"],
+          "concerns": [
+            "equipment lifespan",
+            "safety hazards",
+            "preventive maintenance"
+          ],
           "baseRelationship": 60,
           "emotionalRange": {
             "happy": "Proactive and helpful",
@@ -231,7 +279,7 @@
       "id": "training",
       "name": "Training Mode",
       "description": "Learn the basics with guided scenarios and helpful hints",
-      "daysToComplete": 5,
+      "levelsToComplete": 5,
       "eventFrequency": "low",
       "consequenceSeverity": 0.5
     },
@@ -239,7 +287,7 @@
       "id": "normal",
       "name": "Normal",
       "description": "Balanced challenge with realistic scenarios",
-      "daysToComplete": 7,
+      "levelsToComplete": 7,
       "eventFrequency": "medium",
       "consequenceSeverity": 1.0
     },
@@ -247,7 +295,7 @@
       "id": "challenging",
       "name": "Challenging",
       "description": "High-pressure situations requiring strategic thinking",
-      "daysToComplete": 10,
+      "levelsToComplete": 10,
       "eventFrequency": "high",
       "consequenceSeverity": 1.5
     },
@@ -255,7 +303,7 @@
       "id": "expert",
       "name": "Expert",
       "description": "Complex scenarios with multiple stakeholders and tough decisions",
-      "daysToComplete": 14,
+      "levelsToComplete": 14,
       "eventFrequency": "very-high",
       "consequenceSeverity": 2.0
     }
@@ -303,7 +351,10 @@
       "category": "inventory",
       "criticalLow": 200,
       "warningLow": 400,
-      "optimalRange": [600, 1000]
+      "optimalRange": [
+        600,
+        1000
+      ]
     },
     "chickenBreasts": {
       "name": "Chicken Breasts",
@@ -313,7 +364,10 @@
       "category": "inventory",
       "criticalLow": 100,
       "warningLow": 250,
-      "optimalRange": [350, 600]
+      "optimalRange": [
+        350,
+        600
+      ]
     },
     "friesStock": {
       "name": "French Fries",
@@ -323,7 +377,10 @@
       "category": "inventory",
       "criticalLow": 150,
       "warningLow": 350,
-      "optimalRange": [500, 800]
+      "optimalRange": [
+        500,
+        800
+      ]
     },
     "beverageSyrup": {
       "name": "Beverage Syrup",
@@ -333,7 +390,10 @@
       "category": "inventory",
       "criticalLow": 80,
       "warningLow": 200,
-      "optimalRange": [300, 500]
+      "optimalRange": [
+        300,
+        500
+      ]
     },
     "packagingSupplies": {
       "name": "Packaging Supplies",
@@ -343,7 +403,10 @@
       "category": "inventory",
       "criticalLow": 200,
       "warningLow": 400,
-      "optimalRange": [600, 900]
+      "optimalRange": [
+        600,
+        900
+      ]
     },
     "reputation": {
       "name": "Reputation",

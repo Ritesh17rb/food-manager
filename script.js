@@ -196,6 +196,7 @@ async function init() {
   const gameView = $('#game-container');
   if (gameView && gameConfig) {
     gameInstance = new ManagementGame('#game-container', askLLM, gameConfig);
+    window.game = gameInstance; // Expose to window for onclick handlers
     await gameInstance.init();
   }
 }
@@ -441,6 +442,12 @@ class ManagementGame {
       tickCounter: 0 // Track ticks for Director
     };
 
+    // Sales History (Mock Data for US Context)
+    this.salesHistory = [
+        { day: -2, amount: 1150 },
+        { day: -1, amount: 1320 }
+    ];
+
     // AI Kitchen Director State
     this.kitchenDirector = {
         lastNarrative: null,
@@ -508,16 +515,16 @@ class ManagementGame {
         }
       },
       {
-        id: 'ipl',
-        name: 'IPL Final Match',
-        icon: 'bi-tv',
-        description: 'Cricket fever is peaking! Everyone is glued to screens and ordering snacks.',
+        id: 'ipl', // KEPT ID FOR COMPATIBILITY, BUT RENAMED CONTENT
+        name: 'Super Bowl Sunday', // US Replacement for IPL
+        icon: 'bi-trophy',
+        description: 'The Big Game is on! Everyone is glued to screens and ordering wings.',
         effectDescription: 'Constant stream of delivery & dine-in.',
         apply: (game) => {
            if (game.liveSimulation.tables && game.liveSimulation.tables.length > 0) {
              game.liveSimulation.customerQueue = 10;
            }
-           game.currentDailyEvent = { name: "IPL Final", effect: "Cricket Fever", context: "The match is down to the last over!" };
+           game.currentDailyEvent = { name: "The Big Game", effect: "Sports Fever", context: "The match is down to the final quarter!" };
            game.scenarioMultiplier = 1.3;
         }
       },
@@ -536,18 +543,18 @@ class ManagementGame {
         }
       },
       {
-        id: 'diwali',
-        name: 'Diwali Night',
-        icon: 'bi-stars',
-        description: 'The Festival of Lights. Families are out celebrating with grand meals.',
-        effectDescription: 'Large groups & high expectations.',
+        id: 'diwali', // KEPT ID, RENAMED CONTENT
+        name: 'Christmas Eve', // US Replacement for Diwali
+        icon: 'bi-snow',
+        description: 'Families are gathering for a cozy holiday meal.',
+        effectDescription: 'Large groups, high expectations.',
         apply: (game) => {
            if (game.liveSimulation.tables && game.liveSimulation.tables.length > 0) {
              game.liveSimulation.customerQueue = 8;
            }
-           game.currentDailyEvent = { name: "Diwali Celebration", effect: "Festive Mood", context: "Families are gathering for the festival." };
+           game.currentDailyEvent = { name: "Christmas Eve", effect: "Holiday Spirit", context: "Snow is falling, and the mood is festive." };
            game.scenarioMultiplier = 1.25;
-           // Boost morale initially due to festivity
+           // Boost morale initially
            game.kpis.staffMorale = Math.min(100, (game.kpis.staffMorale || 50) + 10);
         }
       }
@@ -1166,7 +1173,7 @@ Format:
                 </div>
                 <div class="col-6">
                   <div class="small text-white-50">Duration</div>
-                  <div class="fw-bold">${this.selectedDifficulty.daysToComplete} Days</div>
+                  <div class="fw-bold">${this.selectedDifficulty.levelsToComplete} Levels</div>
                 </div>
               </div>
             </div>
@@ -1201,7 +1208,7 @@ Format:
             <div class="d-grid gap-2">
               <button id="start-game-btn" class="btn btn-success btn-lg">
                 <i class="bi bi-play-fill me-2"></i>
-                Start Training
+                Start Game
               </button>
               <button id="back-btn" class="btn btn-outline-light">
                 <i class="bi bi-arrow-left me-2"></i>
@@ -1326,7 +1333,8 @@ async startGame() {
     } else {
       this.kpiDefinitions = this.config.kpiDescriptions;
       try {
-        this.npcs = await this.generateDynamicNPCs(this.selectedIndustry);
+        const scenarioCtx = this.selectedScenarioMode ? `Scenario: ${this.selectedScenarioMode.name} - ${this.selectedScenarioMode.description}` : "";
+        this.npcs = await this.generateDynamicNPCs(this.selectedIndustry, scenarioCtx);
       } catch (e) {
         this.npcs = [...this.selectedIndustry.npcs];
       }
@@ -1556,17 +1564,17 @@ async startGame() {
                 <i class="bi bi-briefcase-fill me-2 text-primary"></i>
                 ${this.selectedIndustry.name} - ${this.selectedRole.name}
               </h4>
-              <small class="text-white-50">Day ${this.currentDay} of ${this.selectedDifficulty.daysToComplete}</small>
+              <small class="text-white-50">Level ${this.currentDay} of ${this.selectedDifficulty.levelsToComplete}</small>
             </div>
             
             <div class="col-auto text-end">
-               <div class="badge bg-warning text-dark mb-1"><i class="bi bi-calendar-event me-1"></i> ${this.currentDailyEvent.name}</div>
+               <div class="badge bg-warning text-dark mb-1"><i class="bi bi-trophy me-1"></i> ${this.currentDailyEvent.name}</div>
                <div class="small text-white-50" style="font-size: 0.75rem;">${this.currentDailyEvent.context}</div>
             </div>
 
             <div class="col-auto">
               <div class="progress" style="width: 200px; height: 8px;">
-                <div class="progress-bar bg-success" style="width: ${(this.currentDay / this.selectedDifficulty.daysToComplete) * 100}%"></div>
+                <div class="progress-bar bg-success" style="width: ${(this.currentDay / this.selectedDifficulty.levelsToComplete) * 100}%"></div>
               </div>
             </div>
           </div>
@@ -1582,63 +1590,14 @@ async startGame() {
         <!-- Live Restaurant Activity (Collapsible Removed) --> 
         <!-- Logic moved to sidebar -->
 
-        <!-- Main Content Area -->
+        <!-- Main Content Area: 3-Column Layout -->
         <div class="container-fluid">
           <div class="row">
-            <!-- Scenario Panel -->
-            <div class="col-lg-8 mb-3">
-              <div class="card bg-dark border-light h-100">
-                <div class="card-header bg-transparent border-bottom border-secondary">
-                  <h5 class="mb-0">
-                    <i class="bi bi-newspaper me-2"></i>
-                    Current Situation
-                  </h5>
-                </div>
-                <div class="card-body" id="scenario-container" style="min-height: 400px;">
-                  <div class="d-flex justify-content-center align-items-center h-100">
-                    <div class="spinner-border text-primary" role="status">
-                      <span class="visually-hidden">Loading...</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <!-- Side Panel -->
-            <div class="col-lg-4">
-              
-              <!-- NEW: Kitchen Activity Widget (Relocated) -->
-              <div class="card bg-dark border-warning mb-3">
-                <div class="card-header bg-transparent border-warning d-flex justify-content-between align-items-center">
-                   <h6 class="mb-0 text-warning"><i class="bi bi-broadcast me-2"></i>Kitchen Activity</h6>
-                   <span class="badge bg-warning text-dark" id="live-customer-count">0 cust</span>
-                </div>
-                <div class="card-body p-2">
-                   <!-- Tables Small Grid -->
-                   <div class="mb-2">
-                     <div class="small text-white-50 mb-1"><i class="bi bi-table me-1"></i>Tables</div>
-                     <div class="d-flex flex-wrap gap-1" id="tables-status"></div>
-                   </div>
-                   
-                   <!-- Active Orders -->
-                   <div class="mb-2">
-                     <div class="small text-white-50 mb-1"><i class="bi bi-receipt me-1"></i>Orders</div>
-                     <div id="active-orders" style="max-height: 100px; overflow-y: auto;"></div>
-                   </div>
-
-                   <!-- Live Feed -->
-                   <div>
-                     <div class="small text-white-50 mb-1"><i class="bi bi-activity me-1"></i>Log</div>
-                     <div id="live-feed" 
-                          class="bg-black bg-opacity-50 rounded p-2" 
-                          style="max-height: 80px; overflow-y: auto; font-size: 0.65rem; font-family: monospace; line-height: 1.2;">
-                     </div>
-                   </div>
-                </div>
-              </div>
-
-              <!-- NPCs -->
-              <div class="card bg-dark border-light mb-3">
+            
+            <!-- Left Column: Team & Manager's Log -->
+            <div class="col-lg-3 mb-3">
+               <!-- Team Card -->
+               <div class="card bg-dark border-light mb-3">
                 <div class="card-header bg-transparent border-bottom border-secondary">
                   <h6 class="mb-0">
                     <i class="bi bi-people-fill me-2"></i>
@@ -1661,22 +1620,77 @@ async startGame() {
                   `).join('')}
                 </div>
               </div>
-
-              <!-- Activity Log -->
-              <div class="card bg-dark border-light">
+              
+              <!-- Manager's Log -->
+              <div class="card bg-dark border-light" style="min-height: 300px;">
                 <div class="card-header bg-transparent border-bottom border-secondary">
                   <h6 class="mb-0">
                     <i class="bi bi-clock-history me-2"></i>
-                    Game Log
+                    Suggestions
                   </h6>
                 </div>
-                <div class="card-body p-2" id="activity-log" style="max-height: 200px; overflow-y: auto;">
+                <div class="card-body p-2" id="activity-log" style="min-height: 250px; max-height: 400px; overflow-y: auto; font-family: monospace; font-size: 0.85rem;">
                   <div class="small text-white-50 text-center p-3">
                     Game started.
                   </div>
                 </div>
               </div>
             </div>
+
+            <!-- Center Column: Current Situation -->
+            <div class="col-lg-6 mb-3">
+              <!-- Scenario Panel -->
+              <div class="card bg-dark border-light" style="min-height: 600px;">
+                <div class="card-header bg-transparent border-bottom border-secondary">
+                  <h5 class="mb-0">
+                    <i class="bi bi-newspaper me-2"></i>
+                    Current Situation
+                  </h5>
+                </div>
+                <div class="card-body" id="scenario-container" style="min-height: 550px; max-height: auto; overflow-y: auto;">
+                  <div class="d-flex justify-content-center align-items-center h-100">
+                    <div class="spinner-border text-primary" role="status">
+                      <span class="visually-hidden">Loading...</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Right Column: Kitchen Activity -->
+            <div class="col-lg-3">
+              <div class="card bg-dark border-warning mb-3">
+                <div class="card-header bg-transparent border-warning d-flex justify-content-between align-items-center">
+                   <h6 class="mb-0 text-warning"><i class="bi bi-broadcast me-2"></i>Kitchen Activity</h6>
+                   <span class="badge bg-warning text-dark" id="live-customer-count">
+                     ${(this.liveSimulation && this.liveSimulation.tables) ? this.liveSimulation.tables.reduce((acc, t) => acc + (t.occupied ? t.customers : 0), 0) : 0} cust
+                   </span>
+                </div>
+                <div class="card-body p-2">
+                   <!-- Tables Small Grid -->
+                   <div class="mb-2">
+                     <div class="small text-white-50 mb-1"><i class="bi bi-table me-1"></i>Tables</div>
+                     <div class="d-flex flex-wrap gap-1" id="tables-status"></div>
+                   </div>
+                   
+                   <!-- Active Orders -->
+                   <div class="mb-2">
+                     <div class="small text-white-50 mb-1"><i class="bi bi-receipt me-1"></i>Orders</div>
+                     <div id="active-orders" style="max-height: 150px; overflow-y: auto;"></div>
+                   </div>
+
+                   <!-- Live Feed -->
+                   <div>
+                     <div class="small text-white-50 mb-1"><i class="bi bi-activity me-1"></i>Log</div>
+                     <div id="live-feed" 
+                          class="bg-black bg-opacity-50 rounded p-2" 
+                          style="max-height:400px; overflow-y: auto; font-size: 0.75rem; font-family: monospace; line-height: 1.2;">
+                     </div>
+                   </div>
+                </div>
+              </div>
+            </div>
+            
           </div>
         </div>
       </div>
@@ -1702,22 +1716,26 @@ async startGame() {
   // ===== LIVE RESTAURANT SIMULATION =====
   
   initializeLiveSimulation() {
-    // Initialize tables (12 tables for a small restaurant)
-    this.liveSimulation.tables = Array.from({length: 12}, (_, i) => ({
-      id: i + 1,
-      occupied: false,
-      customers: 0,
-      order: null,
-      timeSeated: null
-    }));
+    // Only initialize tables if they don't exist (preserve state across levels)
+    if (!this.liveSimulation.tables || this.liveSimulation.tables.length === 0) {
+        // Initialize tables (12 tables for a small restaurant)
+        this.liveSimulation.tables = Array.from({length: 12}, (_, i) => ({
+          id: i + 1,
+          occupied: false,
+          customers: 0,
+          order: null,
+          timeSeated: null
+        }));
+        this.addToLiveFeed('Restaurant opened for business!', 'success');
+    } else {
+        this.addToLiveFeed('Operations continuing...', 'info');
+    }
     
     this.updateTablesDisplay();
     
     // Start simulation loops
-    this.liveSimulation.simulationInterval = setInterval(() => this.runSimulationTick(), 1000); // Faster tick (1s) for smoother feel, logic scales down
-    // Removed separate eventInterval, now integrated into Director logic
-    
-    this.addToLiveFeed('Restaurant opened for business!', 'success');
+    if (this.liveSimulation.simulationInterval) clearInterval(this.liveSimulation.simulationInterval);
+    this.liveSimulation.simulationInterval = setInterval(() => this.runSimulationTick(), 1000); 
   }
 
   stopLiveSimulation() {
@@ -1729,25 +1747,70 @@ async startGame() {
   runSimulationTick() {
     this.liveSimulation.tickCounter++;
 
-    // Customer arrival logic (every 3 seconds approx)
-    if (this.liveSimulation.tickCounter % 3 === 0) {
-        this.handleCustomerArrivalLogic();
-    }
+    // Basic Logic: Steady Customer Flow (don't rely solely on LLM)
+    this.handleCustomerArrivalLogic();
 
-    // Process existing orders (every second)
-    this.processOrders();
-    
-    // Check for departures
-    this.checkCustomerDepartures();
-    
-    // Update displays
-    this.updateTablesDisplay();
-    this.updateOrdersDisplay();
-
-    // --- AI DIRECTOR TRIGGER (Every ~20 seconds) ---
-    if (this.liveSimulation.tickCounter % 20 === 0) {
+    // --- AI SIMULATION UPDATE (Every ~5 seconds) ---
+    // User wants LLM to manage EVERYTHING. So we slow down the logic loop 
+    // and let the LLM decide arrivals, progress, and incidents.
+    if (this.liveSimulation.tickCounter % 5 === 0) {
         this.runKitchenDirector();
     }
+
+    // --- AI PERFORMANCE LOG (Every 60 seconds) ---
+    if (this.liveSimulation.tickCounter % 60 === 0) {
+        this.generatePerformanceLog('periodic');
+    }
+  }
+
+  async generatePerformanceLog(trigger = "periodic") {
+    // Prevent spam if offline
+    if (this.llmOffline) return;
+
+    const stats = this.liveSimulation.tables ? 
+        `Customers: ${this.liveSimulation.totalCustomersToday}, active tables: ${this.liveSimulation.tables.filter(t=>t.occupied).length}/12` : 
+        "Shop closed";
+    const kpis = Object.entries(this.kpis).map(([k,v]) => `${k}:${Math.floor(v)}`).join(', ');
+    
+    const prompt = `
+    You are the manager's assistant.
+    Current Status: ${stats}.
+    Key Metrics: ${kpis}.
+    Trigger: ${trigger}
+    
+    Task: Write a ONE-SENTENCE log entry evaluating performance.
+    Examples:
+    - "Kitchen is slowing down, we need to boost efficiency."
+    - "Customers are happy, sales are climbing steady."
+    - "That last decision really helped our reputation."
+    
+    Output JUST the sentence.
+    `;
+
+    try {
+        const stream = await this.askLLM([{role: 'user', content: prompt}]);
+        let text = "";
+        for await (const chunk of stream) {
+            if (chunk.startsWith(text)) text = chunk; else text += chunk;
+        }
+        if (text && text.trim()) {
+            this.addToActivityLog(`📝 ${text.trim()}`, 'info');
+        }
+    } catch (e) {
+        // Silent fail
+    }
+  }
+
+
+
+  processOrders() {
+     // No-op: LLM controls cooking progress in runKitchenDirector
+  }
+  
+  checkCustomerDepartures() {
+     // Kept as fallback cleanup, but mainly LLM should trigger departures
+     // We can just check for long-sitting tables if LLM forgets them?
+     // For now, let's leave independent departure logic disabled or minimal.
   }
 
   handleCustomerArrivalLogic() {
@@ -1832,33 +1895,15 @@ async startGame() {
     this.addToLiveFeed(`📝 Table ${table.id} ordered: ${orderItems.map(i => i.name).join(', ')} ($${totalPrice})`, 'info');
     this.updateOrdersDisplay();
     
-    // Start cooking
-    setTimeout(() => this.cookOrder(order), Math.random() * 3000 + 2000);
+    // Start cooking - STOPPED JS AUTO START
+    // setTimeout(() => this.cookOrder(order), Math.random() * 3000 + 2000);
+    // LLM will trigger 'start_cooking' update
   }
 
-  cookOrder(order) {
-    if (order.status !== 'pending') return;
-    
-    order.status = 'cooking';
-    this.addToLiveFeed(`🔥 Preparing Table ${order.tableId}'s order`, 'primary');
-    
-    // Deduct inventory
-    order.items.forEach(item => {
-      Object.entries(item.uses).forEach(([kpi, amount]) => {
-        if (this.kpis[kpi] !== undefined) {
-          this.kpis[kpi] = Math.max(0, this.kpis[kpi] - amount);
-        }
-      });
-    });
-    
-    this.updateKPIsDisplay();
-    
-    // Cooking time based on efficiency
-    const efficiency = this.kpis.efficiency || 65;
-    const cookTime = (100 - efficiency) * 50 + Math.random() * 2000; // Lower efficiency = longer cook time
-    
-    setTimeout(() => this.serveOrder(order), cookTime);
-  }
+  // cookOrder removed/deprecated as direct call, now controlled by LLM update action
+  // keeping serveOrder for utility
+
+  /* cookOrder(order) { ... removed ... } */
 
   serveOrder(order) {
     if (order.status !== 'cooking') return;
@@ -1881,8 +1926,9 @@ async startGame() {
     
     this.updateOrdersDisplay();
     
-    // Customers will leave after eating
-    setTimeout(() => this.handleCustomerDeparture(order.tableId), Math.random() * 3000 + 2000);
+    // Customers will leave after eating - STOPPED JS AUTO LEAVE
+    // setTimeout(() => this.handleCustomerDeparture(order.tableId), Math.random() * 3000 + 2000);
+    // LLM will trigger 'leave' update
   }
 
   handleCustomerDeparture(tableId) {
@@ -2089,35 +2135,37 @@ Output ONLY the event text, no JSON, no quotes.`;
   }
 
   async runKitchenDirector() {
-    // Gather Context
-    const activeStat = `${this.liveSimulation.activeOrders.length} active orders`;
-    const queueStat = `${this.liveSimulation.customerQueue} waiting`;
-    const kpiStat = `Eff:${this.kpis.efficiency}, Morale:${this.kpis.staffMorale}`;
+    // Gather Complete State for LLM Control
+    const activeOrdersShort = this.liveSimulation.activeOrders.map(o => `T${o.tableId}:${o.status}`).join(',');
+    const occupiedTables = this.liveSimulation.tables.filter(t => t.occupied).length;
+    const queue = this.liveSimulation.customerQueue;
+    const stats = `Tables:${occupiedTables}/12, Queue:${queue}, Active:${activeOrdersShort}`;
     const scenario = this.selectedScenarioMode ? this.selectedScenarioMode.name : "Standard";
-    const recentLogs = this.kitchenDirector.contextBuffer.join('; ');
-    this.kitchenDirector.contextBuffer = []; // Clear buffer after reading
-
-    const prompt = `You are the AI DIRECTOR of a chaotic restaurant kitchen simulation.
-    Scenario: ${scenario}.
-    Status: ${activeStat}, ${queueStat}, ${kpiStat}.
-    Recent Events: ${recentLogs || "Quiet"}.
-
-    Task: Generate a narrative update (1 sentence) and an optional kitchen event.
-    The narrative should be atmospheric (e.g., sound, smell, staff feeling).
     
-    Event Types (choose wisely based on Status):
-    - "minor_accident" (e.g. dropped plate, burn) -> small delay
-    - "staff_bark" (NPC shouts something) -> neutral/flavor
-    - "equipment_glitch" -> stops a cooking order
-    - "customer_complaint" -> reduced rep
-    - "smooth_sailing" -> boost morale
-    - "rush_hour" -> increase arrival chance momentarily
+    const contextLogs = this.kitchenDirector.contextBuffer.join('; ');
+    this.kitchenDirector.contextBuffer = []; 
 
-    Format JSON:
+    const prompt = `You are the AI KITCHEN ENGINE. 
+    Context: ${scenario}. Stats: ${stats}.
+    Recent: ${contextLogs}.
+    
+    TASK: SIMULATE the next 10 minutes of restaurant operations.
+    Decide ON YOUR OWN:
+    1. New Arrivals: How many people walk in?
+    2. Order Updates: Which pending orders start cooking? Which cooking orders finish?
+    3. Departures: Which served tables leave?
+    4. Incidents/Atmosphere: Any problems or flavor text?
+
+    OUTPUT JSON ONLY:
     {
-       "narrative": "Atmospheric text...",
-       "event": {"type": "type_id", "target": "Chef/Unit", "desc": "What happened"},
-       "mood": "hectic|calm|tense|cheerful"
+      "arrivals": 0 to 5 (people),
+      "updates": [
+         {"tableId": 1, "action": "start_cooking"}, 
+         {"tableId": 2, "action": "finish_cooking"},
+         {"tableId": 3, "action": "leave"}
+      ],
+      "narrative": "One sentence atmosphere",
+      "event": {"type": "incident_type", "desc": "description"} (optional)
     }`;
 
     try {
@@ -2128,18 +2176,72 @@ Output ONLY the event text, no JSON, no quotes.`;
         }
 
         const data = parseRelaxedJSON(fullText);
-        
-        // Apply Director Actions
-        if(data.narrative) {
-             this.addToLiveFeed(data.narrative, 'director');
-        }
-
-        if(data.event) {
-            this.handleDirectorEvent(data.event);
-        }
+        this.applyLLMSimulation(data);
 
     } catch(e) {
-        console.warn("Director offline:", e);
+        console.warn("Sim Engine offline:", e);
+    }
+  }
+
+  applyLLMSimulation(data) {
+      if(!data) return;
+
+      // 1. Narrative
+      if(data.narrative) this.addToLiveFeed(data.narrative, 'director');
+
+      // 2. Arrivals
+      if (data.arrivals > 0) {
+          const groupSize = Math.max(1, Math.min(6, data.arrivals));
+          this.handleLLMCustomerArrival(groupSize);
+      }
+
+      // 3. Updates
+      if (data.updates && Array.isArray(data.updates)) {
+          data.updates.forEach(update => {
+             const table = this.liveSimulation.tables.find(t => t.id === update.tableId);
+             const order = this.liveSimulation.activeOrders.find(o => o.tableId === update.tableId);
+             
+             if (!table) return;
+
+             switch(update.action) {
+                 case 'start_cooking':
+                     if(order && order.status === 'pending') {
+                         order.status = 'cooking';
+                         this.addToLiveFeed(`🔥 Chef starts Table ${table.id}`, 'primary');
+                     }
+                     break;
+                 case 'finish_cooking':
+                     if(order && order.status === 'cooking') {
+                         this.serveOrder(order); // Uses existing logic for logic but controlled by LLM timing
+                     }
+                     break;
+                 case 'leave':
+                     this.handleCustomerDeparture(table.id);
+                     break;
+             }
+          });
+      }
+
+      // 4. Events
+      if(data.event) this.handleDirectorEvent(data.event);
+
+      // Refresh UI
+      this.updateTablesDisplay();
+      this.updateOrdersDisplay();
+  }
+
+  handleLLMCustomerArrival(size) {
+    const table = this.liveSimulation.tables.find(t => !t.occupied);
+    if(table) {
+        table.occupied = true;
+        table.customers = size;
+        table.timeSeated = Date.now();
+        this.addToLiveFeed(`👥 Party of ${size} seated at Table ${table.id}`, 'info');
+        // Auto-generate order details (menu items) via JS helper, but timing controlled by LLM's next 'start_cooking'
+        this.generateOrder(table); 
+    } else {
+        this.liveSimulation.customerQueue += size;
+        this.addToLiveFeed(`⏳ ${size} customers added to waiting list`, 'warning');
     }
   }
 
@@ -3752,6 +3854,35 @@ Output JSON:
     }
   }
 
+  async advanceToNextDay() {
+    this.stopLiveSimulation();
+
+    // Generate Level Review using LLM
+    const sales = this.liveSimulation.totalSalesToday;
+    const history = this.detailedDecisionHistory.slice(-5).map(d => `- ${d.text} (Result: ${d.impact})`).join('\n');
+    
+    // Store daily Record
+    this.salesHistory = this.salesHistory || [];
+    this.salesHistory.push({day: this.currentDay, amount: sales});
+
+    // Level completed - no popup, just continue
+
+    this.currentDay++;
+    // Cumulative stats - do not reset
+    // this.liveSimulation.totalCustomersToday = 0;
+    // this.liveSimulation.totalSalesToday = 0;
+    
+    this.detailedDecisionHistory = [];
+
+    if (this.currentDay > this.selectedDifficulty.levelsToComplete) {
+      this.endGame(true);
+    } else {
+      this.startNewDay(); // Skip morning briefing, go straight to game
+    }
+  }
+
+
+
   processOutcome(result) {
     // Determine visuals
     const multiplier = this.selectedDifficulty.consequenceSeverity;
@@ -3787,6 +3918,7 @@ Output JSON:
     });
 
     // Handle NPC relationship changes
+    // Handle NPC relationship changes
     if (result.npcReaction) {
       const npcId = this.npcs.find(n => n.name === result.npcReaction.npcName)?.id;
       if (npcId && result.npcReaction.relationshipChange) {
@@ -3798,9 +3930,12 @@ Output JSON:
           this.npcEmotionalStates[npcId] = result.npcReaction.mood;
         }
         
-        console.log(`${result.npcReaction.npcName} relationship: ${oldRelationship} → ${this.npcRelationships[npcId]}`);
+        console.log(`${result.npcReaction.npcName} relationship: ${oldRelationship} -> ${this.npcRelationships[npcId]}`);
       }
     }
+    
+    // Generate AI Commentary on this decision
+    this.generatePerformanceLog("decision_made");
 
     this.updateKPIsDisplay();
     this.addToActivityLog(`Task: ${result.text}`);
@@ -3918,7 +4053,7 @@ Output JSON:
       <div class="d-grid gap-2">
         ${clarificationButtonHTML}
         <button id="next-day-btn" class="btn btn-primary btn-lg">
-          Next Day <i class="bi bi-arrow-right ms-2"></i>
+          Next Level <i class="bi bi-arrow-right ms-2"></i>
         </button>
       </div>
     `;
@@ -3932,7 +4067,7 @@ Output JSON:
 
     $('#next-day-btn').onclick = () => {
       this.sounds.playClick();
-      this.advanceDay();
+      this.advanceToNextDay();
     };
 
     // Trigger proactive NPC interaction
@@ -4005,7 +4140,7 @@ Output ONLY valid JSON:
     } catch (e) {
       console.error("Clarification generation failed:", e);
       // Skip to next day if failed
-      this.advanceDay();
+      this.advanceToNextDay();
     }
   }
 
@@ -4203,9 +4338,9 @@ Output ONLY valid JSON:
   }
 
 
-  async generateDynamicNPCs(industry) {
+  async generateDynamicNPCs(industry, scenarioContext = "") {
     const prompt = `Generate 5 unique INTERNAL STAFF NPCs for a "${industry.name}" business.
-    Context: ${industry.description || "A busy workplace"}
+    Context: ${industry.description || "A busy workplace"}. ${scenarioContext}
     
     CRITICAL RULES:
     1. EXCLUDE external roles like "Client", "Rival", "Competitor", "Customer", or "Supplier".
