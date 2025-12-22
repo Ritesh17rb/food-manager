@@ -568,56 +568,214 @@ class ManagementGame {
   renderWelcomeScreen() {
     this.container.innerHTML = `
       <div class="min-vh-100 d-flex flex-column justify-content-center align-items-center text-white p-4" 
-           style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);">
+           style="background: linear-gradient(135deg, #0f2027 0%, #203a43 50%, #2c5364 100%);">
         <div class="text-center mb-5">
-          <h1 class="display-3 mb-3 fw-bold" style="text-shadow: 0 0 20px rgba(13,110,253,0.5);">
-            <i class="bi bi-briefcase-fill me-3"></i>
-            Strategy Game Simulator
+          <h1 class="display-4 mb-3 fw-bold" style="text-shadow: 0 0 30px rgba(13,202,240,0.6);">
+            <i class="bi bi-file-earmark-text me-3"></i>
+            SOP to Simulation
           </h1>
-          <p class="lead text-white-50 mb-4">
-            Learn real-world management skills through interactive scenarios
+          <p class="lead text-white-50 mb-2">
+            Transform Your Standard Operating Procedures into Interactive Training
+          </p>
+          <p class="text-white-50 small">
+            Upload any business SOP and watch it become a playable management simulation
           </p>
         </div>
 
-        <div class="card bg-dark border-light shadow-lg" style="max-width: 600px; width: 100%;">
+        <div class="card bg-dark border-info shadow-lg" style="max-width: 700px; width: 100%;">
           <div class="card-body p-5">
-            <h4 class="card-title text-center mb-4 text-primary">
-              <i class="bi bi-play-circle-fill me-2"></i>
-              Ready to Begin?
+            <h4 class="card-title text-center mb-4 text-info">
+              <i class="bi bi-cloud-upload-fill me-2"></i>
+              Select Your SOP Document
             </h4>
-            <p class="text-white-50 text-center mb-4">
-              You'll be placed in realistic management scenarios where your decisions matter. 
-              Work with your team, manage resources, and handle unexpected challenges.
-            </p>
             
-            <div class="alert alert-info mb-4">
-              <i class="bi bi-info-circle-fill me-2"></i>
-              <strong>What to expect:</strong>
-              <ul class="mb-0 mt-2 small">
-                <li>Choose your industry and role</li>
-                <li>Interact with AI-powered team members</li>
-                <li>Make decisions that affect multiple KPIs</li>
-                <li>Learn from consequences in a safe environment</li>
-              </ul>
+            <!-- Fake Document Upload Area -->
+            <div class="border border-info border-2 rounded p-4 mb-4 text-center" 
+                 style="background: rgba(13,202,240,0.05); cursor: pointer; transition: all 0.3s;"
+                 id="upload-area">
+              <i class="bi bi-file-earmark-pdf display-1 text-info mb-3"></i>
+              <h5 class="text-white mb-2">Click to Browse Documents</h5>
+              <p class="text-white-50 small mb-3">or drag and drop your SOP file here</p>
+              <p class="text-white-50 small mb-0">
+                <i class="bi bi-info-circle me-1"></i>
+                Supported formats: PDF, DOCX, TXT
+              </p>
             </div>
 
-            <div class="d-grid gap-2">
-              <button id="start-setup-btn" class="btn btn-primary btn-lg">
-                <i class="bi bi-arrow-right-circle-fill me-2"></i>
-                Start Setup
-              </button>
+            <!-- Pre-loaded Demo Document -->
+            <div class="alert alert-info mb-4">
+              <div class="d-flex align-items-start">
+                <i class="bi bi-lightbulb-fill me-3 mt-1" style="font-size: 1.5rem;"></i>
+                <div>
+                  <strong>Try Our Demo SOP</strong>
+                  <p class="mb-2 small">See how it works with a pre-loaded example:</p>
+                  <div class="card bg-dark border-warning mt-2" style="cursor: pointer;" id="demo-sop-card">
+                    <div class="card-body p-3">
+                      <div class="d-flex align-items-center">
+                        <i class="bi bi-file-earmark-pdf text-danger me-3" style="font-size: 2rem;"></i>
+                        <div class="flex-grow-1">
+                          <h6 class="mb-1 text-warning">
+                            <i class="bi bi-star-fill me-1"></i>
+                            McDonald's Shift Management SOP
+                          </h6>
+                          <p class="mb-1 small text-white-50">Holiday Rush Protocols 2025</p>
+                          <div class="d-flex gap-2 flex-wrap">
+                            <span class="badge bg-danger">Fast Food</span>
+                            <span class="badge bg-secondary">High Traffic Events</span>
+                            <span class="badge bg-secondary">Staff Management</span>
+                          </div>
+                        </div>
+                        <i class="bi bi-arrow-right-circle-fill text-warning" style="font-size: 1.5rem;"></i>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="text-center">
+              <p class="text-white-50 small mb-0">
+                <i class="bi bi-shield-check me-1"></i>
+                Your documents are processed securely and never stored
+              </p>
             </div>
           </div>
         </div>
 
         <div class="mt-4 text-white-50 small text-center">
           <i class="bi bi-cpu me-1"></i>
-          Powered by AI | Realistic Scenarios | Safe Learning Environment
+          Powered by AI | Document Analysis | Interactive Simulation
         </div>
       </div>
     `;
 
-    $('#start-setup-btn').onclick = () => this.renderIndustrySelection();
+    // Upload area hover effect
+    const uploadArea = $('#upload-area');
+    uploadArea.addEventListener('mouseenter', () => {
+      uploadArea.style.background = 'rgba(13,202,240,0.15)';
+      uploadArea.style.borderColor = '#0dcaf0';
+      uploadArea.style.transform = 'scale(1.02)';
+    });
+    uploadArea.addEventListener('mouseleave', () => {
+      uploadArea.style.background = 'rgba(13,202,240,0.05)';
+      uploadArea.style.borderColor = '';
+      uploadArea.style.transform = 'scale(1)';
+    });
+    uploadArea.onclick = () => {
+      // Simulate file picker (goes to demo for now)
+      this.sounds.playClick();
+      this.renderGenerationScreen();
+    };
+
+    // Demo SOP card click
+    $('#demo-sop-card').onclick = () => {
+      this.sounds.playClick();
+      this.renderGenerationScreen();
+    };
+  }
+
+  renderGenerationScreen() {
+    this.container.innerHTML = `
+      <div class="min-vh-100 d-flex flex-column justify-content-center align-items-center text-white p-4" 
+           style="background: linear-gradient(135deg, #0f2027 0%, #203a43 50%, #2c5364 100%);">
+        <div class="text-center" style="max-width: 700px;">
+          <!-- Document Preview -->
+          <div class="card bg-dark border-info shadow-lg mb-4">
+            <div class="card-body p-4">
+              <div class="d-flex align-items-center mb-3">
+                <i class="bi bi-file-earmark-pdf text-danger me-3" style="font-size: 3rem;"></i>
+                <div class="text-start flex-grow-1">
+                  <h5 class="mb-1 text-warning">McDonald's Shift Management SOP</h5>
+                  <p class="mb-0 small text-white-50">Holiday Rush Protocols 2025</p>
+                </div>
+                <i class="bi bi-check-circle-fill text-success" style="font-size: 2rem;"></i>
+              </div>
+            </div>
+          </div>
+
+          <!-- Processing Animation -->
+          <div class="mb-4">
+            <div class="spinner-border text-info mb-3" style="width: 4rem; height: 4rem;" role="status">
+              <span class="visually-hidden">Loading...</span>
+            </div>
+            <h3 class="mb-4 text-info">
+              <i class="bi bi-cpu-fill me-2"></i>
+              Generating Simulation...
+            </h3>
+          </div>
+
+          <!-- Progress Steps -->
+          <div class="card bg-dark border-secondary shadow-lg">
+            <div class="card-body p-4">
+              <div class="progress mb-4" style="height: 8px;">
+                <div class="progress-bar progress-bar-striped progress-bar-animated bg-info" 
+                     id="gen-progress" style="width: 0%"></div>
+              </div>
+
+              <div class="text-start">
+                <div class="mb-3 generation-step" id="step-1">
+                  <i class="bi bi-hourglass-split text-white-50 me-2"></i>
+                  <span class="text-white-50">Analyzing SOP...</span>
+                </div>
+                <div class="mb-3 generation-step" id="step-2">
+                  <i class="bi bi-hourglass-split text-white-50 me-2"></i>
+                  <span class="text-white-50">Extracting Business Rules...</span>
+                </div>
+                <div class="mb-3 generation-step" id="step-3">
+                  <i class="bi bi-hourglass-split text-white-50 me-2"></i>
+                  <span class="text-white-50">Generating Customer Agents...</span>
+                </div>
+                <div class="mb-3 generation-step" id="step-4">
+                  <i class="bi bi-hourglass-split text-white-50 me-2"></i>
+                  <span class="text-white-50">Configuring Store Scenarios...</span>
+                </div>
+                <div class="generation-step" id="step-5">
+                  <i class="bi bi-hourglass-split text-white-50 me-2"></i>
+                  <span class="text-white-50">Building Interactive Environment...</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <p class="text-white-50 small mt-4 mb-0">
+            <i class="bi bi-info-circle me-1"></i>
+            This may take 10-15 seconds depending on document complexity
+          </p>
+        </div>
+      </div>
+    `;
+
+    // Animate the generation process
+    const steps = [
+      { id: 'step-1', delay: 500, progress: 20, text: 'Analyzing SOP...' },
+      { id: 'step-2', delay: 1200, progress: 40, text: 'Extracting Business Rules...' },
+      { id: 'step-3', delay: 2000, progress: 60, text: 'Generating Customer Agents...' },
+      { id: 'step-4', delay: 2800, progress: 80, text: 'Configuring Store Scenarios...' },
+      { id: 'step-5', delay: 3600, progress: 100, text: 'Building Interactive Environment...' }
+    ];
+
+    steps.forEach((step, index) => {
+      setTimeout(() => {
+        const stepEl = $(`#${step.id}`);
+        const icon = stepEl.querySelector('i');
+        const text = stepEl.querySelector('span');
+        
+        icon.className = 'bi bi-check-circle-fill text-success me-2';
+        text.className = 'text-success fw-bold';
+        
+        $('#gen-progress').style.width = step.progress + '%';
+        
+        this.sounds.playNotification();
+        
+        // After last step, proceed to scenario selection
+        if (index === steps.length - 1) {
+          setTimeout(() => {
+            this.sounds.playSuccess();
+            this.renderScenarioSelectionWithContext();
+          }, 800);
+        }
+      }, step.delay);
+    });
   }
 
   renderIndustrySelection() {
@@ -989,6 +1147,110 @@ Format:
     $('#back-btn').onclick = () => {
       this.sounds.playClick();
       this.renderIndustrySelection();
+    };
+  }
+
+  renderScenarioSelectionWithContext() {
+    // Auto-select Fast Food industry and Store Manager role
+    this.selectedIndustry = this.config.industries.find(i => i.id === 'fast-food');
+    this.selectedRole = this.selectedIndustry.roles.find(r => r.id === 'store-manager');
+    this.isCustomIndustry = false;
+
+    const scenariosHTML = this.startingScenarios.map(scen => `
+      <div class="col-md-4 mb-3">
+        <div class="card bg-dark border-secondary h-100 scenario-card" 
+             data-scenario="${scen.id}"
+             style="cursor: pointer; transition: all 0.3s;">
+          <div class="card-body p-4 text-center">
+            <i class="bi ${scen.icon} display-4 text-info mb-3"></i>
+            <h5 class="card-title text-white mb-2">${scen.name}</h5>
+            <p class="card-text text-white-50 small mb-3 text-wrap">${scen.description}</p>
+            <div class="badge bg-dark border border-info text-info p-2 text-wrap lh-sm">
+              ${scen.effectDescription}
+            </div>
+          </div>
+        </div>
+      </div>
+    `).join('');
+
+    this.container.innerHTML = `
+      <div class="min-vh-100 p-4 text-white" 
+           style="background: linear-gradient(135deg, #0f2027 0%, #203a43 50%, #2c5364 100%);">
+        <div class="container" style="max-width: 1000px;">
+          <!-- SOP Reference Header -->
+          <div class="alert alert-success mb-4">
+            <div class="d-flex align-items-center">
+              <i class="bi bi-check-circle-fill me-3" style="font-size: 2rem;"></i>
+              <div class="flex-grow-1">
+                <h5 class="mb-1">
+                  <i class="bi bi-file-earmark-text me-2"></i>
+                  Simulation Generated from SOP
+                </h5>
+                <p class="mb-0 small">
+                  <strong>Source:</strong> McDonald's Holiday Rush Protocols 2025 (Section 4: High Traffic Holiday Management)
+                </p>
+              </div>
+              <button class="btn btn-outline-success btn-sm" id="view-sop-btn">
+                <i class="bi bi-eye me-1"></i>
+                View Source SOP
+              </button>
+            </div>
+          </div>
+
+          <div class="text-center mb-5">
+            <h2 class="display-5 mb-3">
+              <i class="bi bi-calendar-event me-2"></i>
+              Select Your Scenario
+            </h2>
+            <p class="text-white-50 mb-2">
+              Based on the SOP, choose which high-traffic event you want to manage
+            </p>
+            <div class="d-flex justify-content-center gap-3 flex-wrap">
+              <span class="badge bg-info">Role: Store Manager</span>
+              <span class="badge bg-secondary">Industry: Fast Food Chain</span>
+            </div>
+          </div>
+
+          <div class="row justify-content-center">
+            ${scenariosHTML}
+          </div>
+
+          <div class="text-center mt-5">
+            <button id="back-btn" class="btn btn-outline-light">
+              <i class="bi bi-arrow-left me-2"></i>Back to Document Selection
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+
+    // View SOP button
+    $('#view-sop-btn').onclick = () => {
+      window.open('sop-document.html', '_blank');
+    };
+
+    $$('.scenario-card').forEach(card => {
+      card.addEventListener('mouseenter', () => {
+        card.style.transform = 'translateY(-5px)';
+        card.style.borderColor = '#0dcaf0';
+        card.style.boxShadow = '0 5px 20px rgba(13, 202, 240, 0.3)';
+      });
+      card.addEventListener('mouseleave', () => {
+        card.style.transform = 'translateY(0)';
+        card.style.borderColor = '';
+        card.style.boxShadow = '';
+      });
+      card.addEventListener('click', () => {
+        this.sounds.playClick();
+        const sId = card.dataset.scenario;
+        this.selectedScenarioMode = this.startingScenarios.find(s => s.id === sId);
+        this.renderDifficultySelection();
+      });
+    });
+
+    $('#back-btn').onclick = () => {
+      this.sounds.playClick();
+      this.renderWelcomeScreen();
     };
   }
 
@@ -1428,9 +1690,37 @@ async startGame() {
     `).join('');
 
     this.container.innerHTML = `
-      <div class="min-vh-100 p-4 text-white" style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);">
+      <div class="min-vh-100 p-4 text-white" style="background: linear-gradient(135deg, #0f2027 0%, #203a43 50%, #2c5364 100%);">
         <div class="container" style="max-width: 900px;">
           
+          ${this.currentDay === 1 ? `
+          <!-- SOP Context Banner (Day 1 Only) -->
+          <div class="alert alert-info border-info mb-4">
+            <div class="d-flex align-items-start">
+              <i class="bi bi-file-earmark-text-fill me-3" style="font-size: 2.5rem;"></i>
+              <div class="flex-grow-1">
+                <h5 class="mb-2">
+                  <i class="bi bi-lightbulb-fill me-2"></i>
+                  Simulation Generated Based on SOP
+                </h5>
+                <p class="mb-2 small">
+                  <strong>Source Document:</strong> McDonald's Holiday Rush Protocols 2025<br>
+                  <strong>Relevant Section:</strong> Section 4: High Traffic Event Scenarios - ${this.currentDailyEvent.name}
+                </p>
+                <p class="mb-3 small text-white-50">
+                  <i class="bi bi-info-circle me-1"></i>
+                  Your goal: Maintain <strong>Customer Satisfaction above 80%</strong> during this ${this.currentDailyEvent.name} scenario, 
+                  following the protocols outlined in the SOP.
+                </p>
+                <button class="btn btn-outline-info btn-sm" id="view-sop-btn-briefing">
+                  <i class="bi bi-eye me-1"></i>
+                  View Source SOP Document
+                </button>
+              </div>
+            </div>
+          </div>
+          ` : ''}
+
           <div class="text-center mb-5">
             <h2 class="display-5 text-warning mb-2"><i class="bi bi-sunrise me-2"></i>Morning Briefing</h2>
             <p class="lead text-white-50">Day ${this.currentDay}: ${this.currentDailyEvent.name}</p>
@@ -1501,6 +1791,14 @@ async startGame() {
       };
     });
 
+    // View SOP button (Day 1 only)
+    const sopBtn = $('#view-sop-btn-briefing');
+    if (sopBtn) {
+      sopBtn.onclick = () => {
+        window.open('sop-document.html', '_blank');
+      };
+    }
+
     $('#start-day-btn').onclick = () => {
       this.sounds.playClick();
       const selectedStratId = $('input[name="strategy"]:checked').value;
@@ -1519,9 +1817,82 @@ async startGame() {
         this.updateTablesDisplay();
         this.updateOrdersDisplay();
         this.updateCustomerCount();
+        
+        // Show opening objective modal on Day 1
+        setTimeout(() => this.showObjectiveModal(), 1000);
     }
 
     this.generateScenario();
+  }
+
+  showObjectiveModal() {
+    const scenarioName = this.currentDailyEvent?.name || 'Standard Day';
+    const scenarioContext = this.currentDailyEvent?.context || 'Manage your restaurant effectively.';
+    
+    Swal.fire({
+      title: `<i class="bi bi-bullseye text-warning"></i> Mission Briefing`,
+      html: `
+        <div class="text-start">
+          <div class="alert alert-info mb-3">
+            <h5 class="mb-2">
+              <i class="bi bi-calendar-event me-2"></i>
+              Scenario: ${scenarioName}
+            </h5>
+            <p class="mb-0 small">${scenarioContext}</p>
+          </div>
+
+          <div class="card bg-dark border-warning mb-3">
+            <div class="card-body">
+              <h6 class="text-warning mb-2">
+                <i class="bi bi-trophy-fill me-2"></i>
+                Your Objective:
+              </h6>
+              <p class="mb-2">
+                Maintain <strong class="text-success">Customer Satisfaction above 80%</strong> throughout this shift.
+              </p>
+              <p class="mb-0 small text-white-50">
+                <i class="bi bi-file-earmark-text me-1"></i>
+                Following SOP Section 1: Critical Success Factor
+              </p>
+            </div>
+          </div>
+
+          <div class="card bg-dark border-info mb-3">
+            <div class="card-body">
+              <h6 class="text-info mb-2">
+                <i class="bi bi-lightbulb-fill me-2"></i>
+                Quick Tips:
+              </h6>
+              <ul class="small mb-0">
+                <li><strong>Watch the Activity Log</strong> (bottom right) - Shows real-time events</li>
+                <li><strong>Monitor Inventory</strong> - Orders deduct stock automatically</li>
+                <li><strong>Hover over decisions</strong> - See SOP recommendations</li>
+                <li><strong>Manage your queue</strong> - Long waits hurt satisfaction</li>
+                <li><strong>Balance speed vs quality</strong> - Fast service = happy customers</li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="alert alert-warning mb-0">
+            <small>
+              <i class="bi bi-info-circle me-1"></i>
+              <strong>Pro Tip:</strong> Click "View Source SOP" anytime to see the full protocols this simulation follows.
+            </small>
+          </div>
+        </div>
+      `,
+      icon: null,
+      confirmButtonText: '<i class="bi bi-play-fill me-2"></i>Start Managing!',
+      confirmButtonColor: '#198754',
+      width: '600px',
+      backdrop: 'rgba(0,0,0,0.8)',
+      allowOutsideClick: false,
+      customClass: {
+        popup: 'bg-dark text-white border border-warning',
+        title: 'text-warning',
+        confirmButton: 'btn btn-success btn-lg'
+      }
+    });
   }
 
   renderGameScreen() {
@@ -1844,17 +2215,43 @@ async startGame() {
       // Generate order after a delay
       setTimeout(() => this.generateOrder(availableTable), Math.random() * 2000 + 1000);
       
-      this.addToLiveFeed(`👥 Party of ${partySize} seated at Table ${availableTable.id}`, 'info');
+      // Contextual arrival message based on scenario
+      let arrivalContext = '';
+      if (this.currentDailyEvent) {
+        const eventName = this.currentDailyEvent.name;
+        if (eventName.includes('NBA') || eventName.includes('Game') || eventName.includes('Bowl')) {
+          arrivalContext = ' (sports fans looking for food)';
+        } else if (eventName.includes('Christmas') || eventName.includes('Holiday')) {
+          arrivalContext = ' (holiday shoppers)';
+        } else if (eventName.includes('Carnival') || eventName.includes('Concert')) {
+          arrivalContext = ' (event crowd)';
+        } else if (eventName.includes('Rush')) {
+          arrivalContext = ' (lunch rush hour)';
+        }
+      }
+      
+      this.addToLiveFeed(
+        `👥 Party of ${partySize} seated at Table ${availableTable.id}${arrivalContext}. Total customers today: ${this.liveSimulation.totalCustomersToday}`,
+        'info'
+      );
       
       // Update customer count
       this.updateCustomerCount();
     } else {
       this.liveSimulation.customerQueue++;
-      this.addToLiveFeed(`⏳ ${partySize} customers waiting (no tables available)`, 'warning');
+      this.addToLiveFeed(
+        `⏳ ${partySize} customers waiting in queue (all ${this.liveSimulation.tables.length} tables full). Queue length: ${this.liveSimulation.customerQueue}`,
+        'warning'
+      );
       
       // Negative impact on satisfaction if queue builds up
       if (this.liveSimulation.customerQueue > 3) {
-        this.kpis.customerSatisfaction = Math.max(0, this.kpis.customerSatisfaction - 1);
+        const before = this.kpis.customerSatisfaction;
+        this.kpis.customerSatisfaction = Math.max(0, before - 1);
+        this.addToLiveFeed(
+          `😠 Long wait times hurting satisfaction! ${before} → ${this.kpis.customerSatisfaction} (-1). SOP Section 3.2: Consider adding more staff!`,
+          'danger'
+        );
         this.updateKPIsDisplay();
       }
     }
@@ -1874,25 +2271,103 @@ async startGame() {
     // Generate order for each customer
     const orderItems = [];
     let totalPrice = 0;
+    let inventoryNeeded = {}; // Track what inventory we need
     
     for (let i = 0; i < table.customers; i++) {
       const item = menuItems[Math.floor(Math.random() * menuItems.length)];
       orderItems.push(item);
       totalPrice += item.price;
+      
+      // Accumulate inventory requirements
+      if (item.uses) {
+        Object.entries(item.uses).forEach(([resource, amount]) => {
+          inventoryNeeded[resource] = (inventoryNeeded[resource] || 0) + amount;
+        });
+      }
     }
+    
+    // Check if we have enough inventory
+    let canFulfill = true;
+    let missingItems = [];
+    
+    Object.entries(inventoryNeeded).forEach(([resource, needed]) => {
+      const available = this.kpis[resource] || 0;
+      if (available < needed) {
+        canFulfill = false;
+        missingItems.push(this.kpiDefinitions[resource]?.name || resource);
+      }
+    });
+    
+    // If we can't fulfill the order, reject it
+    if (!canFulfill) {
+      this.addToLiveFeed(
+        `❌ Table ${table.id} order REJECTED - Out of stock: ${missingItems.join(', ')}. Customer satisfaction decreasing!`, 
+        'danger'
+      );
+      
+      // Negative impact on satisfaction
+      this.kpis.customerSatisfaction = Math.max(0, (this.kpis.customerSatisfaction || 75) - 5);
+      this.kpis.reputation = Math.max(0, (this.kpis.reputation || 60) - 3);
+      this.updateKPIsDisplay();
+      
+      // Customer leaves disappointed
+      setTimeout(() => this.handleCustomerDeparture(table.id), 1000);
+      return;
+    }
+    
+    // Deduct inventory immediately when order is placed
+    Object.entries(inventoryNeeded).forEach(([resource, amount]) => {
+      const before = this.kpis[resource] || 0;
+      this.kpis[resource] = Math.max(0, before - amount);
+      
+      // Log inventory changes with cause-and-effect
+      const kpiInfo = this.kpiDefinitions[resource];
+      if (kpiInfo) {
+        this.addToLiveFeed(
+          `📦 ${kpiInfo.name}: ${before} → ${this.kpis[resource]} (-${amount} for Table ${table.id}'s order)`,
+          'secondary'
+        );
+      }
+    });
+    
+    // Check for low inventory warnings
+    Object.entries(inventoryNeeded).forEach(([resource, amount]) => {
+      const current = this.kpis[resource] || 0;
+      const kpiInfo = this.kpiDefinitions[resource];
+      
+      if (kpiInfo && kpiInfo.criticalLow && current <= kpiInfo.criticalLow) {
+        this.addToLiveFeed(
+          `⚠️ CRITICAL: ${kpiInfo.name} at ${current}${kpiInfo.unit}! SOP Section 2.2: Order emergency delivery immediately!`,
+          'danger'
+        );
+      } else if (kpiInfo && kpiInfo.warningLow && current <= kpiInfo.warningLow) {
+        this.addToLiveFeed(
+          `⚠️ WARNING: ${kpiInfo.name} running low (${current}${kpiInfo.unit}). SOP Section 2.1: Consider restocking.`,
+          'warning'
+        );
+      }
+    });
+    
+    this.updateKPIsDisplay();
     
     const order = {
       tableId: table.id,
       items: orderItems,
       totalPrice,
       status: 'pending',
-      placedAt: Date.now()
+      placedAt: Date.now(),
+      inventoryUsed: inventoryNeeded
     };
     
     table.order = order;
     this.liveSimulation.activeOrders.push(order);
     
-    this.addToLiveFeed(`📝 Table ${table.id} ordered: ${orderItems.map(i => i.name).join(', ')} ($${totalPrice})`, 'info');
+    // More descriptive order log
+    const itemsList = orderItems.map(i => i.name).join(', ');
+    this.addToLiveFeed(
+      `📝 Table ${table.id} placed order: ${itemsList} ($${totalPrice}). Kitchen preparing...`, 
+      'info'
+    );
     this.updateOrdersDisplay();
     
     // Start cooking - STOPPED JS AUTO START
@@ -1910,12 +2385,30 @@ async startGame() {
     
     order.status = 'served';
     
-    // Add to sales
-    this.kpis.sales = (this.kpis.sales || 0) + order.totalPrice;
-    this.kpis.budget = (this.kpis.budget || 0) + order.totalPrice;
+    // Add to sales with clear cause-and-effect
+    const beforeSales = this.kpis.sales || 0;
+    const beforeBudget = this.kpis.budget || 0;
+    
+    this.kpis.sales = beforeSales + order.totalPrice;
+    this.kpis.budget = beforeBudget + order.totalPrice;
     this.liveSimulation.totalSalesToday += order.totalPrice;
     
-    this.addToLiveFeed(`✅ Table ${order.tableId} served! +$${order.totalPrice}`, 'success');
+    // Detailed success message
+    this.addToLiveFeed(
+      `✅ Table ${order.tableId} served ${order.items.map(i => i.name).join(', ')}. Revenue: $${beforeSales} → $${this.kpis.sales} (+$${order.totalPrice})`,
+      'success'
+    );
+    
+    // Small satisfaction boost for good service
+    const timeTaken = Date.now() - order.placedAt;
+    if (timeTaken < 15000) { // Fast service (under 15 seconds)
+      this.kpis.customerSatisfaction = Math.min(100, (this.kpis.customerSatisfaction || 75) + 1);
+      this.addToLiveFeed(
+        `😊 Fast service! Customer satisfaction increased. SOP Section 4.1: Speed matters during rush periods.`,
+        'success'
+      );
+    }
+    
     this.updateKPIsDisplay();
     
     // Remove from active orders
@@ -1936,22 +2429,44 @@ async startGame() {
     if (!table || !table.occupied) return;
     
     const satisfaction = this.kpis.customerSatisfaction || 75;
+    const reputation = this.kpis.reputation || 60;
     const timeSpent = Date.now() - table.timeSeated;
+    const customerCount = table.customers;
+    
+    // Determine experience quality
+    let experienceRating = 'good';
+    let satisfactionChange = 0;
+    let reputationChange = 0;
+    let message = '';
+    let messageType = 'info';
     
     // If service was too slow, reduce satisfaction
     if (timeSpent > 30000) { // More than 30 seconds in simulation time
-      this.kpis.customerSatisfaction = Math.max(0, satisfaction - 2);
-      this.addToLiveFeed(`😐 Table ${tableId} left (slow service)`, 'warning');
+      experienceRating = 'poor';
+      satisfactionChange = -3;
+      reputationChange = -2;
+      messageType = 'danger';
+      message = `😞 Table ${tableId} (${customerCount} customers) left unhappy. Service took too long (${Math.round(timeSpent/1000)}s). Satisfaction: ${satisfaction} → ${Math.max(0, satisfaction + satisfactionChange)} (-3). SOP Section 4.1: Prioritize speed during rush!`;
+    } else if (timeSpent > 20000) {
+      experienceRating = 'okay';
+      satisfactionChange = -1;
+      messageType = 'warning';
+      message = `😐 Table ${tableId} (${customerCount} customers) left. Service was acceptable but slow. Satisfaction: ${satisfaction} → ${Math.max(0, satisfaction + satisfactionChange)} (-1)`;
     } else {
-      // Small chance of positive feedback
-      if (Math.random() < 0.3) {
-        this.kpis.customerSatisfaction = Math.min(100, satisfaction + 1);
-        this.kpis.reputation = Math.min(100, (this.kpis.reputation || 60) + 0.5);
-        this.addToLiveFeed(`😊 Table ${tableId} left happy!`, 'success');
-      } else {
-        this.addToLiveFeed(`👋 Table ${tableId} left`, 'secondary');
-      }
+      experienceRating = 'excellent';
+      satisfactionChange = +2;
+      reputationChange = +1;
+      messageType = 'success';
+      message = `😊 Table ${tableId} (${customerCount} customers) left happy! Quick service (${Math.round(timeSpent/1000)}s). Satisfaction: ${satisfaction} → ${Math.min(100, satisfaction + satisfactionChange)} (+2), Reputation: ${reputation} → ${Math.min(100, reputation + reputationChange)} (+1)`;
     }
+    
+    // Apply changes
+    this.kpis.customerSatisfaction = Math.max(0, Math.min(100, satisfaction + satisfactionChange));
+    if (reputationChange !== 0) {
+      this.kpis.reputation = Math.max(0, Math.min(100, reputation + reputationChange));
+    }
+    
+    this.addToLiveFeed(message, messageType);
     
     // Clear table
     table.occupied = false;
@@ -1962,6 +2477,7 @@ async startGame() {
     // Seat waiting customers if any
     if (this.liveSimulation.customerQueue > 0) {
       this.liveSimulation.customerQueue--;
+      this.addToLiveFeed(`🎯 Seating waiting customers from queue. Queue: ${this.liveSimulation.customerQueue + 1} → ${this.liveSimulation.customerQueue}`, 'info');
       setTimeout(() => this.handleCustomerArrival(), 500);
     }
     
@@ -3588,16 +4104,25 @@ Output JSON:
           return `<span class="badge bg-${color} bg-opacity-50 me-1"><i class="bi ${kpiInfo.icon} me-1"></i>${value > 0 ? '+' : ''}${value}</span>`;
         }).join('') : '';
 
+      // Generate SOP recommendation tooltip
+      const sopTooltip = this.generateSOPTooltip(option);
+
       return `
         <div class="card bg-secondary bg-opacity-25 border-secondary mb-3 option-card" 
-             data-index="${index}" style="cursor: pointer;">
+             data-index="${index}" 
+             style="cursor: pointer; transition: all 0.3s;"
+             data-bs-toggle="tooltip" 
+             data-bs-placement="right"
+             data-bs-html="true"
+             title="${sopTooltip}">
           <div class="card-body p-3">
             <div class="d-flex align-items-center">
               <div class="badge bg-primary me-3">${String.fromCharCode(65 + index)}</div>
-              <div>
+              <div class="flex-grow-1">
                 <h6 class="mb-1">${option.text}</h6>
                 <div class="small">${consequencesHTML}</div>
               </div>
+              <i class="bi bi-info-circle text-info ms-2" style="font-size: 1.2rem;"></i>
             </div>
           </div>
         </div>`;
@@ -3605,7 +4130,20 @@ Output JSON:
 
     container.innerHTML = `<div class="options-list">${optionsHTML}</div>`;
 
+    // Initialize Bootstrap tooltips
     $$('.option-card', container).forEach(card => {
+      // Hover effects
+      card.addEventListener('mouseenter', () => {
+        card.style.transform = 'translateX(5px)';
+        card.style.borderColor = '#0dcaf0';
+        card.style.boxShadow = '0 0 15px rgba(13,202,240,0.3)';
+      });
+      card.addEventListener('mouseleave', () => {
+        card.style.transform = 'translateX(0)';
+        card.style.borderColor = '';
+        card.style.boxShadow = '';
+      });
+
       card.onclick = () => {
         // Adapt to old handleDecision
         const opt = data.options[card.dataset.index];
@@ -3616,6 +4154,56 @@ Output JSON:
         });
       };
     });
+  }
+
+  generateSOPTooltip(option) {
+    // Generate contextual SOP recommendations based on the option
+    const text = option.text.toLowerCase();
+    const consequences = option.consequences || {};
+    
+    let tooltip = '<div class="text-start"><strong><i class="bi bi-file-earmark-text me-1"></i>SOP Guidance:</strong><br>';
+    
+    // Inventory-related decisions
+    if (text.includes('order') || text.includes('stock') || text.includes('inventory')) {
+      if (text.includes('increase') || text.includes('more')) {
+        tooltip += '<small>Section 2.1: Increase inventory by 20-30% when local events exceed 10k attendees.</small>';
+      } else if (text.includes('maintain') || text.includes('standard')) {
+        tooltip += '<small>Section 2.2: Monitor inventory every 2 hours during rush periods.</small>';
+      } else {
+        tooltip += '<small>Section 2.1: Avoid over-ordering beyond 48-hour capacity to prevent waste.</small>';
+      }
+    }
+    // Staff-related decisions
+    else if (text.includes('staff') || text.includes('morale') || text.includes('break') || text.includes('training')) {
+      if (text.includes('break') || text.includes('rest')) {
+        tooltip += '<small>Section 3.1: Provide 15-minute breaks every 3 hours to maintain morale above 50%.</small>';
+      } else if (text.includes('hire') || text.includes('schedule')) {
+        tooltip += '<small>Section 3.2: Schedule minimum 2 additional staff for events over 15k attendance.</small>';
+      } else {
+        tooltip += '<small>Section 3.1: Staff morale directly impacts service quality and efficiency.</small>';
+      }
+    }
+    // Speed vs Quality decisions
+    else if (text.includes('speed') || text.includes('fast') || text.includes('quick')) {
+      tooltip += '<small>Section 4.1: Prioritize speed during high-traffic events, but maintain quality standards.</small>';
+    } else if (text.includes('quality') || text.includes('presentation')) {
+      tooltip += '<small>Section 4.2: Focus on quality during family-oriented events like Christmas Eve.</small>';
+    }
+    // Equipment decisions
+    else if (text.includes('equipment') || text.includes('maintenance') || text.includes('repair')) {
+      tooltip += '<small>Section 5.1: Equipment below 50% condition reduces efficiency by up to 30%.</small>';
+    }
+    // Customer satisfaction
+    else if (text.includes('customer') || text.includes('satisfaction') || text.includes('service')) {
+      tooltip += '<small>Section 1: Maintain Customer Satisfaction above 80% to preserve brand reputation.</small>';
+    }
+    // Generic fallback
+    else {
+      tooltip += '<small>Section 6: Prioritize customer safety, satisfaction, and staff morale in that order.</small>';
+    }
+    
+    tooltip += '</div>';
+    return tooltip.replace(/"/g, '&quot;');
   }
 
   renderTrueFalse(data, container) {
