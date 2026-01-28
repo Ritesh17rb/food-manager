@@ -559,6 +559,66 @@ class ManagementGame {
         }
       }
     ];
+
+    // SOP selections
+    this.availableSops = [
+      {
+        id: 'shift-management',
+        title: "McDonald's Shift Management SOP",
+        subtitle: 'Holiday Rush Protocols 2025',
+        tags: ['Fast Food', 'High Traffic Events', 'Staff Management'],
+        section: 'Section 4: High Traffic Holiday Management',
+        summary: 'Focuses on staffing, morale, and inventory tactics for peak holiday traffic while protecting customer satisfaction.',
+        docUrl: 'sop-document.html'
+      },
+      {
+        id: 'food-safety',
+        title: "McDonald's Food Safety & Sanitation SOP",
+        subtitle: 'Daily Cleanliness Standards 2025',
+        tags: ['Food Safety', 'Sanitation', 'Compliance'],
+        section: 'Section 2: Hygiene and Temperature Controls',
+        summary: 'Covers sanitation cadence, handwashing, safe temperature targets, and daily opening/closing cleaning routines.',
+        docUrl: 'sop-food-safety.html'
+      },
+      {
+        id: 'drive-thru',
+        title: "McDonald's Drive-Thru Operations SOP",
+        subtitle: 'Speed of Service Playbook 2025',
+        tags: ['Drive-Thru', 'Service Speed', 'Accuracy'],
+        section: 'Section 3: Peak Hour Throughput',
+        summary: 'Defines drive-thru timing goals, staging rules, accuracy checks, and peak-hour throughput tactics.',
+        docUrl: 'sop-drive-thru.html'
+      },
+      {
+        id: 'inventory',
+        title: "McDonald's Inventory & Stocking SOP",
+        subtitle: 'Stock Control Guide 2025',
+        tags: ['Inventory', 'Waste Reduction', 'Ordering'],
+        section: 'Section 2: Restock Triggers and Cycle Counts',
+        summary: 'Details par levels, reorder triggers, FIFO rules, and the cycle count schedule to minimize waste.',
+        docUrl: 'sop-inventory.html'
+      },
+      {
+        id: 'complaints',
+        title: "McDonald's Customer Complaint SOP",
+        subtitle: 'Service Recovery Standards 2025',
+        tags: ['Customer Care', 'Service Recovery', 'Brand Trust'],
+        section: 'Section 1: De-escalation and Recovery Steps',
+        summary: 'Outlines the L.A.S.T. method, resolution options, and response timing for guest recovery.',
+        docUrl: 'sop-complaints.html'
+      },
+      {
+        id: 'equipment',
+        title: "McDonald's Equipment Maintenance SOP",
+        subtitle: 'Preventive Maintenance Plan 2025',
+        tags: ['Maintenance', 'Safety', 'Uptime'],
+        section: 'Section 5: Critical Equipment Checks',
+        summary: 'Defines preventive checks, weekly maintenance, and escalation rules to keep kitchen equipment online.',
+        docUrl: 'sop-equipment.html'
+      }
+    ];
+
+    this.selectedSop = this.availableSops[0];
   }
 
   async init() {
@@ -566,6 +626,37 @@ class ManagementGame {
   }
 
   renderWelcomeScreen() {
+    const sopCardsHTML = this.availableSops.map((sop) => `
+      <div class="col-sm-6 col-lg-4">
+        <div class="card bg-dark border-warning h-100 sop-card" style="cursor: default;" data-sop-id="${sop.id}">
+          <div class="card-body p-3">
+            <div class="d-flex align-items-center">
+              <i class="bi bi-file-earmark-pdf text-danger me-3" style="font-size: 2rem;"></i>
+              <div class="flex-grow-1">
+                <h6 class="mb-1 text-warning">
+                  <i class="bi bi-star-fill me-1"></i>
+                  ${sop.title}
+                </h6>
+                <p class="mb-1 small text-white-50">${sop.subtitle}</p>
+                <div class="d-flex gap-2 flex-wrap">
+                  ${sop.tags.map(tag => `<span class="badge bg-secondary">${tag}</span>`).join('')}
+                </div>
+              </div>
+              <i class="bi bi-arrow-right-circle-fill text-warning" style="font-size: 1.5rem;"></i>
+            </div>
+            <div class="d-flex gap-2 mt-3 flex-wrap">
+              <button class="btn btn-outline-light btn-sm view-sop-btn" data-sop-id="${sop.id}">
+                <i class="bi bi-eye me-1"></i>View SOP
+              </button>
+              <button class="btn btn-warning btn-sm start-sop-btn" data-sop-id="${sop.id}">
+                <i class="bi bi-play-fill me-1"></i>Start Simulation
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    `).join('');
+
     this.container.innerHTML = `
       <div class="min-vh-100 d-flex flex-column justify-content-center align-items-center text-white p-4" 
            style="background: linear-gradient(135deg, #0f2027 0%, #203a43 50%, #2c5364 100%);">
@@ -582,7 +673,7 @@ class ManagementGame {
           </p>
         </div>
 
-        <div class="card bg-dark border-info shadow-lg" style="max-width: 700px; width: 100%;">
+        <div class="card bg-dark border-info shadow-lg" style="max-width: 1100px; width: 100%;">
           <div class="card-body p-5">
             <h4 class="card-title text-center mb-4 text-info">
               <i class="bi bi-cloud-upload-fill me-2"></i>
@@ -607,27 +698,10 @@ class ManagementGame {
               <div class="d-flex align-items-start">
                 <i class="bi bi-lightbulb-fill me-3 mt-1" style="font-size: 1.5rem;"></i>
                 <div>
-                  <strong>Try Our Demo SOP</strong>
-                  <p class="mb-2 small">See how it works with a pre-loaded example:</p>
-                  <div class="card bg-dark border-warning mt-2" style="cursor: pointer;" id="demo-sop-card">
-                    <div class="card-body p-3">
-                      <div class="d-flex align-items-center">
-                        <i class="bi bi-file-earmark-pdf text-danger me-3" style="font-size: 2rem;"></i>
-                        <div class="flex-grow-1">
-                          <h6 class="mb-1 text-warning">
-                            <i class="bi bi-star-fill me-1"></i>
-                            McDonald's Shift Management SOP
-                          </h6>
-                          <p class="mb-1 small text-white-50">Holiday Rush Protocols 2025</p>
-                          <div class="d-flex gap-2 flex-wrap">
-                            <span class="badge bg-danger">Fast Food</span>
-                            <span class="badge bg-secondary">High Traffic Events</span>
-                            <span class="badge bg-secondary">Staff Management</span>
-                          </div>
-                        </div>
-                        <i class="bi bi-arrow-right-circle-fill text-warning" style="font-size: 1.5rem;"></i>
-                      </div>
-                    </div>
+                  <strong>Choose a Demo SOP</strong>
+                  <p class="mb-2 small">Pick one of the six SOPs to start the simulation:</p>
+                  <div class="row g-3 mt-2">
+                    ${sopCardsHTML}
                   </div>
                 </div>
               </div>
@@ -664,17 +738,46 @@ class ManagementGame {
     uploadArea.onclick = () => {
       // Simulate file picker (goes to demo for now)
       this.sounds.playClick();
+      this.selectedSop = this.availableSops[0];
       this.renderGenerationScreen();
     };
 
-    // Demo SOP card click
-    $('#demo-sop-card').onclick = () => {
-      this.sounds.playClick();
-      this.renderGenerationScreen();
-    };
+    // SOP card hover
+    $$('.sop-card').forEach((card) => {
+      card.addEventListener('mouseenter', () => {
+        card.style.transform = 'translateY(-3px)';
+        card.style.borderColor = '#ffc107';
+      });
+      card.addEventListener('mouseleave', () => {
+        card.style.transform = 'translateY(0)';
+        card.style.borderColor = '';
+      });
+    });
+
+    // View SOP button
+    $$('.view-sop-btn').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const sopId = btn.dataset.sopId;
+        const selectedSop = this.availableSops.find(s => s.id === sopId) || this.availableSops[0];
+        window.open(selectedSop.docUrl, '_blank');
+      });
+    });
+
+    // Start simulation button
+    $$('.start-sop-btn').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const sopId = btn.dataset.sopId;
+        this.selectedSop = this.availableSops.find(s => s.id === sopId) || this.availableSops[0];
+        this.sounds.playClick();
+        this.renderGenerationScreen();
+      });
+    });
   }
 
   renderGenerationScreen() {
+    const selectedSop = this.selectedSop || this.availableSops[0];
     this.container.innerHTML = `
       <div class="min-vh-100 d-flex flex-column justify-content-center align-items-center text-white p-4" 
            style="background: linear-gradient(135deg, #0f2027 0%, #203a43 50%, #2c5364 100%);">
@@ -685,8 +788,11 @@ class ManagementGame {
               <div class="d-flex align-items-center mb-3">
                 <i class="bi bi-file-earmark-pdf text-danger me-3" style="font-size: 3rem;"></i>
                 <div class="text-start flex-grow-1">
-                  <h5 class="mb-1 text-warning">McDonald's Shift Management SOP</h5>
-                  <p class="mb-0 small text-white-50">Holiday Rush Protocols 2025</p>
+                  <h5 class="mb-1 text-warning">${selectedSop.title}</h5>
+                  <p class="mb-1 small text-white-50">${selectedSop.subtitle}</p>
+                  <div class="d-flex gap-2 flex-wrap">
+                    ${selectedSop.tags.map(tag => `<span class="badge bg-secondary">${tag}</span>`).join('')}
+                  </div>
                 </div>
                 <i class="bi bi-check-circle-fill text-success" style="font-size: 2rem;"></i>
               </div>
@@ -715,7 +821,7 @@ class ManagementGame {
               <div class="text-start">
                 <div class="mb-3 generation-step" id="step-1">
                   <i class="bi bi-hourglass-split text-white-50 me-2"></i>
-                  <span class="text-white-50">Analyzing SOP...</span>
+                  <span class="text-white-50">Analyzing ${selectedSop.title}...</span>
                 </div>
                 <div class="mb-3 generation-step" id="step-2">
                   <i class="bi bi-hourglass-split text-white-50 me-2"></i>
@@ -747,7 +853,7 @@ class ManagementGame {
 
     // Animate the generation process
     const steps = [
-      { id: 'step-1', delay: 500, progress: 20, text: 'Analyzing SOP...' },
+      { id: 'step-1', delay: 500, progress: 20, text: `Analyzing ${selectedSop.title}...` },
       { id: 'step-2', delay: 1200, progress: 40, text: 'Extracting Business Rules...' },
       { id: 'step-3', delay: 2000, progress: 60, text: 'Generating Customer Agents...' },
       { id: 'step-4', delay: 2800, progress: 80, text: 'Configuring Store Scenarios...' },
@@ -1155,6 +1261,7 @@ Format:
     this.selectedIndustry = this.config.industries.find(i => i.id === 'fast-food');
     this.selectedRole = this.selectedIndustry.roles.find(r => r.id === 'store-manager');
     this.isCustomIndustry = false;
+    const selectedSop = this.selectedSop || this.availableSops[0];
 
     const scenariosHTML = this.startingScenarios.map(scen => `
       <div class="col-md-4 mb-3">
@@ -1187,7 +1294,7 @@ Format:
                   Simulation Generated from SOP
                 </h5>
                 <p class="mb-0 small">
-                  <strong>Source:</strong> McDonald's Holiday Rush Protocols 2025 (Section 4: High Traffic Holiday Management)
+                  <strong>Source:</strong> ${selectedSop.subtitle} (${selectedSop.section})
                 </p>
               </div>
               <button class="btn btn-outline-success btn-sm" id="view-sop-btn">
@@ -1203,7 +1310,7 @@ Format:
               Select Your Scenario
             </h2>
             <p class="text-white-50 mb-2">
-              Based on the SOP, choose which high-traffic event you want to manage
+              Based on the SOP, choose which scenario you want to manage
             </p>
             <div class="d-flex justify-content-center gap-3 flex-wrap">
               <span class="badge bg-info">Role: Store Manager</span>
@@ -1226,7 +1333,7 @@ Format:
 
     // View SOP button
     $('#view-sop-btn').onclick = () => {
-      window.open('sop-document.html', '_blank');
+      window.open(selectedSop.docUrl, '_blank');
     };
 
     $$('.scenario-card').forEach(card => {
@@ -1338,7 +1445,7 @@ Format:
             <div class="small">
               <div class="d-flex justify-content-between mb-2">
                 <span class="text-white-50">Duration:</span>
-                <span class="text-white"><strong>${diff.daysToComplete} days</strong></span>
+                <span class="text-white"><strong>${diff.daysToComplete || diff.levelsToComplete} days</strong></span>
               </div>
               <div class="d-flex justify-content-between mb-2">
                 <span class="text-white-50">Event Frequency:</span>
@@ -1405,6 +1512,10 @@ Format:
       this.sounds.playClick();
       this.renderScenarioSelection();
     };
+  }
+
+  getDifficultyDays() {
+    return this.selectedDifficulty?.daysToComplete || this.selectedDifficulty?.levelsToComplete || 7;
   }
 
   renderGameSummary() {
@@ -1704,8 +1815,8 @@ async startGame() {
                   Simulation Generated Based on SOP
                 </h5>
                 <p class="mb-2 small">
-                  <strong>Source Document:</strong> McDonald's Holiday Rush Protocols 2025<br>
-                  <strong>Relevant Section:</strong> Section 4: High Traffic Event Scenarios - ${this.currentDailyEvent.name}
+                  <strong>Source Document:</strong> ${(this.selectedSop || this.availableSops[0]).subtitle}<br>
+                  <strong>Relevant Section:</strong> ${(this.selectedSop || this.availableSops[0]).section} - ${this.currentDailyEvent.name}
                 </p>
                 <p class="mb-3 small text-white-50">
                   <i class="bi bi-info-circle me-1"></i>
@@ -1795,7 +1906,8 @@ async startGame() {
     const sopBtn = $('#view-sop-btn-briefing');
     if (sopBtn) {
       sopBtn.onclick = () => {
-        window.open('sop-document.html', '_blank');
+        const selectedSop = this.selectedSop || this.availableSops[0];
+        window.open(selectedSop.docUrl, '_blank');
       };
     }
 
@@ -3010,16 +3122,20 @@ ${recentDecisions}` : '';
   Communication Style: ${npc.communicationStyle || 'Professional'}${memorySection}`;
     }).join('\n\n');
 
+    const selectedSop = this.selectedSop || this.availableSops[0];
     const prompt = `You are an advanced Strategy Game simulator creating HIGHLY DETAILED, SPECIFIC scenarios.
 
 GAME CONTEXT:
 - Industry: ${this.selectedIndustry.name}
 - Your Role: ${this.selectedRole.name}
-- Day: ${this.currentDay} of ${this.selectedDifficulty.daysToComplete}
+- Day: ${this.currentDay} of ${this.getDifficultyDays()}
 - Daily Event: "${this.currentDailyEvent.name}" (${this.currentDailyEvent.context})
 - Daily Strategy: "${this.dailyStrategy ? this.dailyStrategy.name : 'Balanced'}" (${this.dailyStrategy ? this.dailyStrategy.description : ''})
 - Previous Decision Outcome: ${this.currentNarrativeContext || "None (First Scenario)"}
 - Story Arc: ${this.storyline ? this.storyline.slice(-3).map(s => s.summary).join(' → ') : "Starting"}
+- SOP Focus: ${selectedSop.title} - ${selectedSop.subtitle}
+- SOP Guidance: ${selectedSop.summary}
+- SOP Section: ${selectedSop.section}
 
 DETAILED KPI STATUS:
 ${kpiStatus}
@@ -3052,6 +3168,7 @@ CRITICAL INSTRUCTIONS FOR SCENARIO CREATION:
    - Technicians: Equipment, maintenance, safety
    
 7. **INCLUDE CLARIFICATION OPPORTUNITY**: After presenting the scenario, the NPC should offer to answer questions or provide more details if needed. This allows the player to seek clarification.
+8. **ALIGN TO SOP**: Scenario details, decisions, and consequences must align to the SOP focus and section above.
 
 The scenario MUST involve: ${relevantNPC.name} (${relevantNPC.role})
 Their expertise: ${relevantNPC.expertise ? relevantNPC.expertise.join(', ') : 'General'}
@@ -3511,7 +3628,7 @@ JSON Structure:
   handleTurnEnd() {
     this.questionsAnswered++; 
 
-    if (this.currentDay >= this.selectedDifficulty.daysToComplete) {
+    if (this.currentDay >= this.getDifficultyDays()) {
       this.endGame();
     } else {
       // Check for NPC intrusion every 2 questions (Preserve this, but maybe context logic makes it redundant? Keeping it for "Escalations")
@@ -3598,7 +3715,7 @@ JSON Structure:
       this.sounds.playClick();
       this.currentDay++;
       
-      if (this.currentDay > this.selectedDifficulty.daysToComplete) {
+      if (this.currentDay > this.getDifficultyDays()) {
          this.endGame();
       } else {
          this.renderMorningBriefing();
@@ -4927,8 +5044,10 @@ Output ONLY valid JSON:
 
 
   async generateDynamicNPCs(industry, scenarioContext = "") {
+    const selectedSop = this.selectedSop || this.availableSops[0];
     const prompt = `Generate 5 unique INTERNAL STAFF NPCs for a "${industry.name}" business.
     Context: ${industry.description || "A busy workplace"}. ${scenarioContext}
+    SOP Focus: ${selectedSop.title} - ${selectedSop.subtitle}. ${selectedSop.summary}
     
     CRITICAL RULES:
     1. EXCLUDE external roles like "Client", "Rival", "Competitor", "Customer", or "Supplier".
@@ -4990,7 +5109,7 @@ Output ONLY valid JSON:
 }
 
   advanceDay() {
-    if (this.currentDay >= this.selectedDifficulty.daysToComplete) {
+    if (this.currentDay >= this.getDifficultyDays()) {
       this.endGame();
     } else {
       this.currentDay++;
