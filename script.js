@@ -568,7 +568,7 @@ class ManagementGame {
         subtitle: 'Holiday Rush Protocols 2025',
         tags: ['Fast Food', 'High Traffic Events', 'Staff Management'],
         section: 'Section 4: High Traffic Holiday Management',
-        summary: 'Focuses on staffing, morale, and inventory tactics for peak holiday traffic while protecting customer satisfaction.',
+        summary: 'Covers staffing coverage, morale boosts, and event playbooks with KPI thresholds for satisfaction, efficiency, and waste control during peak holiday traffic.',
         docUrl: 'sop-document.html'
       },
       {
@@ -577,7 +577,7 @@ class ManagementGame {
         subtitle: 'Daily Cleanliness Standards 2025',
         tags: ['Food Safety', 'Sanitation', 'Compliance'],
         section: 'Section 2: Hygiene and Temperature Controls',
-        summary: 'Covers sanitation cadence, handwashing, safe temperature targets, and daily opening/closing cleaning routines.',
+        summary: 'Defines handwashing rules, temperature targets, sanitizer ppm, cross-contamination controls, audit cadence, and incident response for food safety compliance.',
         docUrl: 'sop-food-safety.html'
       },
       {
@@ -586,7 +586,7 @@ class ManagementGame {
         subtitle: 'Speed of Service Playbook 2025',
         tags: ['Drive-Thru', 'Service Speed', 'Accuracy'],
         section: 'Section 3: Peak Hour Throughput',
-        summary: 'Defines drive-thru timing goals, staging rules, accuracy checks, and peak-hour throughput tactics.',
+        summary: 'Sets speed targets, order-accuracy checks, staging rules, staffing coverage, and contingency actions when queues or dwell times exceed thresholds.',
         docUrl: 'sop-drive-thru.html'
       },
       {
@@ -595,7 +595,7 @@ class ManagementGame {
         subtitle: 'Stock Control Guide 2025',
         tags: ['Inventory', 'Waste Reduction', 'Ordering'],
         section: 'Section 2: Restock Triggers and Cycle Counts',
-        summary: 'Details par levels, reorder triggers, FIFO rules, and the cycle count schedule to minimize waste.',
+        summary: 'Details par levels, reorder triggers, FIFO rotation, receiving checks, waste logging, and emergency reorder playbooks to minimize variance.',
         docUrl: 'sop-inventory.html'
       },
       {
@@ -604,7 +604,7 @@ class ManagementGame {
         subtitle: 'Service Recovery Standards 2025',
         tags: ['Customer Care', 'Service Recovery', 'Brand Trust'],
         section: 'Section 1: De-escalation and Recovery Steps',
-        summary: 'Outlines the L.A.S.T. method, resolution options, and response timing for guest recovery.',
+        summary: 'Outlines the L.A.S.T. method, 3-minute acknowledgement rule, recovery options, escalation thresholds, and documentation requirements.',
         docUrl: 'sop-complaints.html'
       },
       {
@@ -613,7 +613,7 @@ class ManagementGame {
         subtitle: 'Preventive Maintenance Plan 2025',
         tags: ['Maintenance', 'Safety', 'Uptime'],
         section: 'Section 5: Critical Equipment Checks',
-        summary: 'Defines preventive checks, weekly maintenance, and escalation rules to keep kitchen equipment online.',
+        summary: 'Defines daily and weekly maintenance, temperature tolerances, uptime targets, and escalation steps for critical equipment outages.',
         docUrl: 'sop-equipment.html'
       }
     ];
@@ -669,48 +669,23 @@ class ManagementGame {
             Transform Your Standard Operating Procedures into Interactive Training
           </p>
           <p class="text-white-50 small">
-            Upload any business SOP and watch it become a playable management simulation
+            Pick a demo SOP to launch a playable management simulation
           </p>
         </div>
 
         <div class="card bg-dark border-info shadow-lg" style="max-width: 1100px; width: 100%;">
           <div class="card-body p-5">
-            <h4 class="card-title text-center mb-4 text-info">
-              <i class="bi bi-cloud-upload-fill me-2"></i>
-              Select Your SOP Document
-            </h4>
-            
-            <!-- Fake Document Upload Area -->
-            <div class="border border-info border-2 rounded p-4 mb-4 text-center" 
-                 style="background: rgba(13,202,240,0.05); cursor: pointer; transition: all 0.3s;"
-                 id="upload-area">
-              <i class="bi bi-file-earmark-pdf display-1 text-info mb-3"></i>
-              <h5 class="text-white mb-2">Click to Browse Documents</h5>
-              <p class="text-white-50 small mb-3">or drag and drop your SOP file here</p>
-              <p class="text-white-50 small mb-0">
-                <i class="bi bi-info-circle me-1"></i>
-                Supported formats: PDF, DOCX, TXT
-              </p>
-            </div>
-
-            <!-- Pre-loaded Demo Document -->
-            <div class="alert alert-info mb-4">
-              <div class="d-flex align-items-start">
-                <i class="bi bi-lightbulb-fill me-3 mt-1" style="font-size: 1.5rem;"></i>
-                <div>
-                  <strong>Choose a Demo SOP</strong>
-                  <p class="mb-2 small">Pick one of the six SOPs to start the simulation:</p>
-                  <div class="row g-3 mt-2">
-                    ${sopCardsHTML}
-                  </div>
-                </div>
-              </div>
+            <p class="text-white-50 small text-center mb-4">
+              Pick one of the six SOPs to start the simulation
+            </p>
+            <div class="row g-3 mt-2">
+              ${sopCardsHTML}
             </div>
 
             <div class="text-center">
               <p class="text-white-50 small mb-0">
                 <i class="bi bi-shield-check me-1"></i>
-                Your documents are processed securely and never stored
+                Demo SOPs only. No uploads are used on this screen
               </p>
             </div>
           </div>
@@ -722,25 +697,6 @@ class ManagementGame {
         </div>
       </div>
     `;
-
-    // Upload area hover effect
-    const uploadArea = $('#upload-area');
-    uploadArea.addEventListener('mouseenter', () => {
-      uploadArea.style.background = 'rgba(13,202,240,0.15)';
-      uploadArea.style.borderColor = '#0dcaf0';
-      uploadArea.style.transform = 'scale(1.02)';
-    });
-    uploadArea.addEventListener('mouseleave', () => {
-      uploadArea.style.background = 'rgba(13,202,240,0.05)';
-      uploadArea.style.borderColor = '';
-      uploadArea.style.transform = 'scale(1)';
-    });
-    uploadArea.onclick = () => {
-      // Simulate file picker (goes to demo for now)
-      this.sounds.playClick();
-      this.selectedSop = this.availableSops[0];
-      this.renderGenerationScreen();
-    };
 
     // SOP card hover
     $$('.sop-card').forEach((card) => {
